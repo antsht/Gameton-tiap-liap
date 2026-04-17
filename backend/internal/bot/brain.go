@@ -79,6 +79,9 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 	}
+	
+	// Пишем лог с подробностями хода на диск
+	go b.dumpTurn(arena, cmd)
 }
 
 func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction {
@@ -112,6 +115,10 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		for id, p := range idle {
 			if assigned >= needed {
 				break
+			}
+			// Защита от самоповреждения/самолечения
+			if p.Position[0] == target[0] && p.Position[1] == target[1] {
+				continue
 			}
 			if distance(p.Position, target) <= actionRange {
 				actions = append(actions, api.PlantationAction{

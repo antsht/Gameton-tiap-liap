@@ -100,7 +100,7 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 
-		if !relocated && (progress >= 50 || mainPlantation.Hp <= 20) {
+		if !relocated && (progress >= 85 || mainPlantation.Hp <= 20) {
 			bestProg := progress
 			var bestPos []int
 			for _, p := range arena.Plantations {
@@ -183,7 +183,13 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	// ПРИОРИТЕТ 800: Достройка текущих объектов
 	for _, constr := range arena.Construction {
-		tasks = append(tasks, targetTask{"Finish Construction", constr.Position, 5, 0, 800})
+		needed := 5
+		prio := 800
+		if constr.Progress >= 90 {
+			needed = 50 // Ultra-Finish: бросаем всех дронов
+			prio = 1100 // Выше чем ремонт ЦУ, чтобы точно достроить за ход
+		}
+		tasks = append(tasks, targetTask{"Finish Construction", constr.Position, needed, 0, prio})
 	}
 
 	// ПРИОРИТЕТ 700: Саботаж врагов

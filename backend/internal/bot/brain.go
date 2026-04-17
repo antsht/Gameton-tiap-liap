@@ -73,19 +73,26 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 	if mainPos != nil {
 		progress := b.getCellProgress(arena, mainPos)
 
-		if progress >= 75 || mainHp <= 15 {
+		// Превентивная эвакуация: начинаем на 50% (осталось 10 ходов)
+		// Ищем плантацию с МИНИМАЛЬНЫМ прогрессом терраформирования
+		if progress >= 50 || mainHp <= 20 {
+			bestProg := 999
+			var bestPos []int
 			for _, p := range arena.Plantations {
 				if p.IsMain || p.IsIsolated {
 					continue
 				}
 				pProg := b.getCellProgress(arena, p.Position)
-				if pProg < 40 && p.Hp >= 30 {
-					from := []int{mainPos[0], mainPos[1]}
-					to := []int{p.Position[0], p.Position[1]}
-					cmd.RelocateMain = [][]int{from, to}
-					b.Log(fmt.Sprintf("EVACUATE CU from %v to %v (prog=%d%%, hp=%d)", from, to, progress, mainHp))
-					break
+				if p.Hp >= 20 && pProg < bestProg {
+					bestProg = pProg
+					bestPos = []int{p.Position[0], p.Position[1]}
 				}
+			}
+			// Переезжаем если нашли кого-то со значительно меньшим прогрессом
+			if bestPos != nil && bestProg < progress-10 {
+				from := []int{mainPos[0], mainPos[1]}
+				cmd.RelocateMain = [][]int{from, bestPos}
+				b.Log(fmt.Sprintf("EVACUATE CU %v→%v (our=%d%% target=%d%%)", from, bestPos, progress, bestProg))
 			}
 		}
 	}
@@ -161,9 +168,15 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		return assigned
 	}
 
-	// 1. Defend CU
+	// 1. Repair low-HP plantations (from earthquake/storm/beaver damage)
+	// Ремонт нужен: HP не восстанавливается автоматически. Сначала ЦУ, потом остальные.
 	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 40 {
-		assign(mainPlantation.Position, 5)
+		assign(mainPlantation.Position, 3)
+	}
+	for _, p := range arena.Plantations {
+		if !p.IsMain && !p.IsIsolated && p.Hp > 0 && p.Hp <= 30 {
+			assign(p.Position, 2)
+		}
 	}
 
 	// 2. Hunt Beavers (Prize x10)
@@ -171,50 +184,72 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		assign(bvr.Position, 4)
 	}
 
-	// 3. Finish Constructions
+	// 3. Finish Constructions — max priority, push hard
 	for _, constr := range arena.Construction {
-		assign(constr.Position, 3)
+		assign(constr.Position, 5)
 	}
 
-	// 4. Aggressive Expansion
+	// 4. Aggressive Expansion — prioritize extending chain AWAY from CU
 	limit := b.getMaxPlantations(arena)
 	currentCount := len(arena.Plantations) + len(arena.Construction)
 
 	if currentCount < limit && len(idle) > 0 {
-		candidates := make(map[string][]int)
+		type candidate struct {
+			pos  []int
+			dist int
+			gold bool
+		}
+		var cands []candidate
+
 		for _, p := range arena.Plantations {
 			if p.IsIsolated {
 				continue
 			}
-			// Find adjacent empty cells — ONLY cardinal directions!
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) {
 					key := fmt.Sprintf("%d,%d", n[0], n[1])
-					candidates[key] = n
+					// Deduplicate
+					dup := false
+					for _, c := range cands {
+						if fmt.Sprintf("%d,%d", c.pos[0], c.pos[1]) == key {
+							dup = true
+							break
+						}
+					}
+					if !dup {
+						dx := n[0] - mainPlantation.Position[0]
+						dy := n[1] - mainPlantation.Position[1]
+						if dx < 0 { dx = -dx }
+						if dy < 0 { dy = -dy }
+						dist := dx + dy
+						gold := n[0]%7 == 0 && n[1]%7 == 0
+						cands = append(cands, candidate{n, dist, gold})
+					}
 				}
 			}
 		}
 
-		// Prioritize golden cells
-		for key, n := range candidates {
-			if len(idle) == 0 || currentCount >= limit {
-				break
-			}
-			if n[0]%7 == 0 && n[1]%7 == 0 {
-				if assign(n, 3) > 0 {
-					currentCount++
+		// Sort: gold first, then by distance from CU (farthest first — extends chain)
+		for i := 0; i < len(cands); i++ {
+			for j := i + 1; j < len(cands); j++ {
+				swap := false
+				if cands[j].gold && !cands[i].gold {
+					swap = true
+				} else if cands[j].gold == cands[i].gold && cands[j].dist > cands[i].dist {
+					swap = true
 				}
-				delete(candidates, key)
+				if swap {
+					cands[i], cands[j] = cands[j], cands[i]
+				}
 			}
 		}
 
-		// Fill normal cells
-		for _, n := range candidates {
+		for _, c := range cands {
 			if len(idle) == 0 || currentCount >= limit {
 				break
 			}
-			if assign(n, 2) > 0 {
+			if assign(c.pos, 3) > 0 {
 				currentCount++
 			}
 		}
@@ -224,19 +259,37 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 }
 
 func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
-	priority := []string{
-		"settlement_limit",
-		"decay_mitigation",
-		"max_hp",
-		"signal_range",
-		"vision_range",
-		"repair_power",
-		"earthquake_mitigation",
-		"beaver_damage_mitigation",
-	}
 	tierMap := make(map[string]api.PlantationUpgradeTierItem)
 	for _, t := range arena.PlantationUpgrades.Tiers {
 		tierMap[t.Name] = t
+	}
+
+	// Экстренная покупка: землетрясение через <=3 хода
+	for _, m := range arena.MeteoForecasts {
+		if m.Kind == "earthquake" && m.TurnsUntil <= 3 {
+			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current < t.Max {
+				return "earthquake_mitigation"
+			}
+		}
+	}
+
+	// Стратегический приоритет:
+	// 1. settlement_limit — больше плантаций = больше очков
+	// 2. decay_mitigation — стройки выживают дольше без прогресса (DS: 10→4)
+	// 3. earthquake_mitigation — стройки переживают землетрясение (10→4)
+	// 4. beaver_damage_mitigation — бобры убивают всё (15→5)
+	// 5. max_hp — больше HP = больше живучесть
+	// 6. signal_range — можно строить через посредников
+	// 7. repair_power / vision_range — полезно, но не критично
+	priority := []string{
+		"settlement_limit",
+		"decay_mitigation",
+		"earthquake_mitigation",
+		"beaver_damage_mitigation",
+		"max_hp",
+		"signal_range",
+		"repair_power",
+		"vision_range",
 	}
 	for _, name := range priority {
 		if t, ok := tierMap[name]; ok && t.Current < t.Max {

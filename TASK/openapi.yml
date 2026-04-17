@@ -1,0 +1,319 @@
+openapi: 3.0.1
+info:
+  title: Game API
+  description: Game API
+  contact: {}
+  version: "1.0"
+servers:
+  - url: https://games-test.datsteam.dev
+    description: Test server
+  - url: https://games.datsteam.dev
+    description: Production server
+paths:
+  /api/command:
+    post:
+      tags:
+      - player
+      summary: Command
+      description: Commands for player's plantations
+      requestBody:
+        description: Player command
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/command.PlayerDTO'
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/gamesdk.PublicError'
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/gamesdk.PublicError'
+      security:
+      - ApiKeyAuth: []
+      x-codegen-request-body-name: request
+  /api/arena:
+    get:
+      tags:
+      - player
+      summary: Ant orders and map response
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/dto.PlayerResponse'
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/gamesdk.PublicError'
+      security:
+      - ApiKeyAuth: []
+  /api/logs:
+    get:
+      tags:
+      - player
+      summary: Player logs
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/player.LogMessage'
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/gamesdk.PublicError'
+      security:
+      - ApiKeyAuth: []
+components:
+  schemas:
+    command.PlantationActionDTO:
+      type: object
+      properties:
+        path:
+          type: array
+          items:
+            maxItems: 2
+            minItems: 2
+            type: array
+            items:
+              type: integer
+    command.PlayerDTO:
+      type: object
+      properties:
+        command:
+          type: array
+          items:
+            $ref: '#/components/schemas/command.PlantationActionDTO'
+        plantationUpgrade:
+          type: string
+          example: repair_power
+        relocateMain:
+          type: array
+          items:
+            maxItems: 2
+            minItems: 2
+            type: array
+            items:
+              type: integer
+    dto.ConstructionDTO:
+      type: object
+      properties:
+        position:
+          maxItems: 2
+          minItems: 2
+          type: array
+          items:
+            type: integer
+        progress:
+          type: integer
+    dto.EnemyPlantationDTO:
+      type: object
+      properties:
+        hp:
+          type: integer
+        id:
+          type: string
+        position:
+          maxItems: 2
+          minItems: 2
+          type: array
+          items:
+            type: integer
+    dto.MeteoForecastDTO:
+      type: object
+      properties:
+        forming:
+          type: boolean
+          description: "Sandstorm-only: true while gathering; false while moving (dealing\
+            \ damage each turn)."
+        id:
+          type: string
+          description: "ID: sandstorm-only identifier; changes when a new storm spawns."
+        kind:
+          type: string
+          description: earthquake | sandstorm | …
+          example: earthquake
+        nextPosition:
+          maxItems: 2
+          minItems: 2
+          type: array
+          description: "Sandstorm-only while moving: center after the next step (omitted\
+            \ if the whole disk would leave the map)."
+          items:
+            type: integer
+        position:
+          maxItems: 2
+          minItems: 2
+          type: array
+          description: "Sandstorm-only: storm center [x,y] (disk per radius)."
+          items:
+            type: integer
+        radius:
+          type: integer
+          description: "Sandstorm-only: disk radius r (cells satisfy dx²+dy² ≤ r²\
+            ); config echo."
+        turnsUntil:
+          type: integer
+          description: "TurnsUntil: earthquake — turns until the quake (0 = this turn).\
+            \ Sandstorm — only while forming (turns until it starts moving); omitted\
+            \ when moving."
+    dto.PlantationDTO:
+      type: object
+      properties:
+        hp:
+          type: integer
+        id:
+          type: string
+        immunityUntilTurn:
+          type: integer
+        isIsolated:
+          type: boolean
+        isMain:
+          type: boolean
+        position:
+          maxItems: 2
+          minItems: 2
+          type: array
+          items:
+            type: integer
+    dto.PlantationUpgradeTierItemDTO:
+      type: object
+      properties:
+        current:
+          type: integer
+        max:
+          type: integer
+        name:
+          type: string
+          example: repair_power
+    dto.PlantationUpgradesState:
+      type: object
+      properties:
+        intervalTurns:
+          type: integer
+        maxPoints:
+          type: integer
+        points:
+          type: integer
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/dto.PlantationUpgradeTierItemDTO'
+        turnsUntilPoints:
+          type: integer
+    dto.PlayerBeaverDTO:
+      type: object
+      properties:
+        hp:
+          type: integer
+        id:
+          type: string
+        position:
+          maxItems: 2
+          minItems: 2
+          type: array
+          items:
+            type: integer
+    dto.PlayerResponse:
+      type: object
+      properties:
+        actionRange:
+          type: integer
+        beavers:
+          type: array
+          items:
+            $ref: '#/components/schemas/dto.PlayerBeaverDTO'
+        cells:
+          type: array
+          items:
+            $ref: '#/components/schemas/dto.TerraformedCellDTO'
+        construction:
+          type: array
+          items:
+            $ref: '#/components/schemas/dto.ConstructionDTO'
+        enemy:
+          type: array
+          items:
+            $ref: '#/components/schemas/dto.EnemyPlantationDTO'
+        meteoForecasts:
+          type: array
+          description: "MeteoForecasts is always present (possibly empty). Cataclysms\
+            \ use the same item shape: earthquake sets kind+turnsUntil;"
+          items:
+            $ref: '#/components/schemas/dto.MeteoForecastDTO'
+        mountains:
+          type: array
+          items:
+            maxItems: 2
+            minItems: 2
+            type: array
+            items:
+              type: integer
+        nextTurnIn:
+          type: number
+        plantationUpgrades:
+          $ref: '#/components/schemas/dto.PlantationUpgradesState'
+        plantations:
+          type: array
+          items:
+            $ref: '#/components/schemas/dto.PlantationDTO'
+        size:
+          maxItems: 2
+          minItems: 2
+          type: array
+          items:
+            type: integer
+        turnNo:
+          type: integer
+    dto.TerraformedCellDTO:
+      type: object
+      properties:
+        position:
+          maxItems: 2
+          minItems: 2
+          type: array
+          items:
+            type: integer
+        terraformationProgress:
+          type: integer
+        turnsUntilDegradation:
+          type: integer
+    gamesdk.PublicError:
+      type: object
+      properties:
+        code:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+    player.LogMessage:
+      type: object
+      properties:
+        message:
+          type: string
+        time:
+          type: string
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      name: X-Auth-Token
+      in: header
+x-original-swagger-version: "2.0"

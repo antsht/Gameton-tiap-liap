@@ -1,0 +1,107 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [],
+    "construction": [],
+    "enemy": [],
+    "meteoForecasts": [],
+    "mountains": [
+      [
+        256,
+        144
+      ],
+      [
+        256,
+        145
+      ],
+      [
+        256,
+        148
+      ]
+    ],
+    "nextTurnIn": 0.934,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 7,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 3,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 25
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "f3cb3c70-7f39-43a7-b9f4-375c88feda88",
+        "immunityUntilTurn": 308,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          257,
+          146
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 305
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            257,
+            146
+          ],
+          [
+            256,
+            146
+          ]
+        ]
+      }
+    ]
+  }
+}

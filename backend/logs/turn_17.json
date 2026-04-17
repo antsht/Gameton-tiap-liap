@@ -1,0 +1,158 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          77,
+          144
+        ],
+        "terraformationProgress": 80,
+        "turnsUntilDegradation": 44
+      },
+      {
+        "position": [
+          76,
+          144
+        ],
+        "terraformationProgress": 30,
+        "turnsUntilDegradation": 54
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          78,
+          144
+        ],
+        "progress": 45
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": true,
+        "id": "50bf43a1-b6cb-49fd-a0dc-9339de21e9e5",
+        "kind": "sandstorm",
+        "position": [
+          300,
+          300
+        ],
+        "radius": 30,
+        "turnsUntil": 5
+      }
+    ],
+    "mountains": [],
+    "nextTurnIn": 0.885,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 13
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "e36cbe38-70d2-4eef-959f-de349f6035ef",
+        "immunityUntilTurn": 4,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          77,
+          144
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "a2c0f58a-412b-4ef8-9ecd-e5a26e88c434",
+        "immunityUntilTurn": 15,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          76,
+          144
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 17
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            77,
+            144
+          ],
+          [
+            78,
+            144
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            76,
+            144
+          ],
+          [
+            77,
+            144
+          ],
+          [
+            78,
+            144
+          ]
+        ]
+      }
+    ]
+  }
+}

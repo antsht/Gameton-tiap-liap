@@ -19,8 +19,8 @@ type Client struct {
 
 func NewClient(baseURL, token string) *Client {
 	return &Client{
-		BaseURL:    baseURL,
-		AuthToken:  token,
+		BaseURL:   baseURL,
+		AuthToken: token,
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -52,7 +52,7 @@ func (c *Client) req(method, path string, body interface{}, out interface{}) err
 		return fmt.Errorf("do %s %s err: %w", method, path, err)
 	}
 	defer resp.Body.Close()
-	
+
 	respBodyBytes, _ := io.ReadAll(resp.Body)
 
 	// Сохраняем сырой ответ от сервера в отдельную папку

@@ -1,0 +1,200 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [
+      {
+        "hp": 100,
+        "id": "beaver-lodge-567",
+        "position": [
+          177,
+          44
+        ]
+      }
+    ],
+    "cells": [
+      {
+        "position": [
+          175,
+          47
+        ],
+        "terraformationProgress": 85,
+        "turnsUntilDegradation": 43
+      },
+      {
+        "position": [
+          177,
+          47
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 25
+      },
+      {
+        "position": [
+          176,
+          47
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 36
+      },
+      {
+        "position": [
+          174,
+          47
+        ],
+        "terraformationProgress": 35,
+        "turnsUntilDegradation": 53
+      },
+      {
+        "position": [
+          178,
+          47
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 17
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          173,
+          47
+        ],
+        "progress": 27
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "5f0f94a1-bab1-4d58-9e21-010130dd5f96",
+        "kind": "sandstorm",
+        "nextPosition": [
+          102,
+          102
+        ],
+        "position": [
+          103,
+          103
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        173,
+        49
+      ]
+    ],
+    "nextTurnIn": 1.135,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 10,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 3,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 2,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 0
+    },
+    "plantations": [
+      {
+        "hp": 38,
+        "id": "eac82173-e9e9-4e99-a0c2-db89ac7226a6",
+        "immunityUntilTurn": 548,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          175,
+          47
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "da69c373-8551-424a-ac8f-683a8b06edaa",
+        "immunityUntilTurn": 558,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          174,
+          47
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 561
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            175,
+            47
+          ],
+          [
+            174,
+            47
+          ],
+          [
+            173,
+            47
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            174,
+            47
+          ],
+          [
+            173,
+            47
+          ]
+        ]
+      }
+    ]
+  }
+}

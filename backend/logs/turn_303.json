@@ -1,0 +1,136 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          102,
+          119
+        ],
+        "terraformationProgress": 90,
+        "turnsUntilDegradation": 42
+      },
+      {
+        "position": [
+          103,
+          119
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 30
+      },
+      {
+        "position": [
+          104,
+          119
+        ],
+        "terraformationProgress": 30,
+        "turnsUntilDegradation": 34
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          101,
+          119
+        ],
+        "progress": 21
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [],
+    "mountains": [
+      [
+        105,
+        117
+      ],
+      [
+        104,
+        117
+      ]
+    ],
+    "nextTurnIn": 0.909,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 7,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 3,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 27
+    },
+    "plantations": [
+      {
+        "hp": 42,
+        "id": "4435c6d9-dfde-4cea-9ff5-4a5c7f8da573",
+        "immunityUntilTurn": 289,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          102,
+          119
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 303
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            102,
+            119
+          ],
+          [
+            101,
+            119
+          ]
+        ]
+      }
+    ]
+  }
+}

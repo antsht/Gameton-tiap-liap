@@ -1,0 +1,246 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          41,
+          88
+        ],
+        "terraformationProgress": 25,
+        "turnsUntilDegradation": 55
+      },
+      {
+        "position": [
+          38,
+          88
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 27
+      },
+      {
+        "position": [
+          37,
+          88
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 19
+      },
+      {
+        "position": [
+          37,
+          89
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 11
+      },
+      {
+        "position": [
+          37,
+          87
+        ],
+        "terraformationProgress": 50,
+        "turnsUntilDegradation": 22
+      },
+      {
+        "position": [
+          38,
+          89
+        ],
+        "terraformationProgress": 60,
+        "turnsUntilDegradation": 0
+      },
+      {
+        "position": [
+          40,
+          88
+        ],
+        "terraformationProgress": 75,
+        "turnsUntilDegradation": 45
+      },
+      {
+        "position": [
+          39,
+          87
+        ],
+        "terraformationProgress": 50,
+        "turnsUntilDegradation": 50
+      },
+      {
+        "position": [
+          39,
+          88
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 36
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          42,
+          88
+        ],
+        "progress": 30
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "09cbb213-96bd-460b-b0ed-736953a1eb72",
+        "kind": "sandstorm",
+        "nextPosition": [
+          149,
+          229
+        ],
+        "position": [
+          148,
+          230
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        36,
+        88
+      ],
+      [
+        36,
+        84
+      ],
+      [
+        36,
+        89
+      ]
+    ],
+    "nextTurnIn": 1.108,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 3,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 1,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 25
+    },
+    "plantations": [
+      {
+        "hp": 10,
+        "id": "28cb6e33-4a21-4b7c-845c-b42ec4521741",
+        "immunityUntilTurn": 119,
+        "isIsolated": true,
+        "isMain": false,
+        "position": [
+          39,
+          87
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "6e4da314-c30c-42c2-b634-a3d3501bd0d6",
+        "immunityUntilTurn": 124,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          41,
+          88
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "d0a05046-8a6b-4568-be72-922e75d19753",
+        "immunityUntilTurn": 114,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          40,
+          88
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 125
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            41,
+            88
+          ],
+          [
+            41,
+            88
+          ],
+          [
+            42,
+            88
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            40,
+            88
+          ],
+          [
+            40,
+            88
+          ],
+          [
+            42,
+            88
+          ]
+        ]
+      }
+    ]
+  }
+}

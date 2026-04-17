@@ -1,0 +1,127 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          72,
+          159
+        ],
+        "terraformationProgress": 35,
+        "turnsUntilDegradation": 53
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          71,
+          159
+        ],
+        "progress": 30
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "50bf43a1-b6cb-49fd-a0dc-9339de21e9e5",
+        "kind": "sandstorm",
+        "nextPosition": [
+          269,
+          269
+        ],
+        "position": [
+          270,
+          270
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [],
+    "nextTurnIn": 0.151,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 1,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 8
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "8d2e9f0c-9df0-4f2e-9347-db8181e51ffc",
+        "immunityUntilTurn": 48,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          72,
+          159
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 52
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            72,
+            159
+          ],
+          [
+            71,
+            159
+          ]
+        ]
+      }
+    ]
+  }
+}

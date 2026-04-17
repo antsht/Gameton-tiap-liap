@@ -1,0 +1,111 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          77,
+          144
+        ],
+        "terraformationProgress": 35,
+        "turnsUntilDegradation": 53
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          76,
+          144
+        ],
+        "progress": 30
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [],
+    "mountains": [],
+    "nextTurnIn": 1.112,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 22
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "e36cbe38-70d2-4eef-959f-de349f6035ef",
+        "immunityUntilTurn": 4,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          77,
+          144
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 8
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            77,
+            144
+          ],
+          [
+            76,
+            144
+          ]
+        ]
+      }
+    ]
+  }
+}

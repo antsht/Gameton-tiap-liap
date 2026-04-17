@@ -102,8 +102,12 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 				}
 				dx := p.Position[0] - mainPos[0]
 				dy := p.Position[1] - mainPos[1]
-				if dx < 0 { dx = -dx }
-				if dy < 0 { dy = -dy }
+				if dx < 0 {
+					dx = -dx
+				}
+				if dy < 0 {
+					dy = -dy
+				}
 				if dx+dy != 1 {
 					continue
 				}
@@ -127,8 +131,12 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 				}
 				dx := p.Position[0] - mainPos[0]
 				dy := p.Position[1] - mainPos[1]
-				if dx < 0 { dx = -dx }
-				if dy < 0 { dy = -dy }
+				if dx < 0 {
+					dx = -dx
+				}
+				if dy < 0 {
+					dy = -dy
+				}
 				if dx+dy != 1 {
 					continue
 				}
@@ -149,11 +157,17 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		// Проверяем есть ли хотя бы одна смежная плантация или стройка рядом с ЦУ
 		hasAdjacentEscape := false
 		for _, p := range arena.Plantations {
-			if p.IsMain { continue }
+			if p.IsMain {
+				continue
+			}
 			dx := p.Position[0] - mainPos[0]
 			dy := p.Position[1] - mainPos[1]
-			if dx < 0 { dx = -dx }
-			if dy < 0 { dy = -dy }
+			if dx < 0 {
+				dx = -dx
+			}
+			if dy < 0 {
+				dy = -dy
+			}
 			if dx+dy == 1 {
 				pProg := b.getCellProgress(arena, p.Position)
 				if pProg < progress { // Есть куда бежать
@@ -287,12 +301,18 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		assign(bvr.Position, 4)
 	}
 
-	// 3. Finish Constructions — max priority, push hard
-	for _, constr := range arena.Construction {
-		assign(constr.Position, 5)
+	// 2.5 Focus attack enemies!
+	for _, enemy := range arena.Enemy {
+		// Send a massive attack on enemy plantations to destroy them and get huge points
+		assign(enemy.Position, 5)
 	}
 
-	// 4. Linear Chain Expansion — ALWAYS build escape route for CU first!
+	// 3. Finish Constructions — max priority, push hard
+	for _, constr := range arena.Construction {
+		assign(constr.Position, 4)
+	}
+
+	// 4. Expansion: Escape routes, Golden cells, Mesh network
 	limit := b.getMaxPlantations(arena)
 	currentCount := len(arena.Plantations) + len(arena.Construction)
 
@@ -309,14 +329,13 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) {
-					// Чем выше прогресс ЦУ, тем больше приоритет escape route
-					prio := 100 + cuProg
+					prio := 10000 + cuProg // Absolute priority
 					cands = append(cands, candidate{n, prio})
 				}
 			}
 		}
 
-		// Затем ищем клетки на краю цепочки (extending the chain — medium priority)
+		// Затем ищем клетки для расширения сети
 		for _, p := range arena.Plantations {
 			if p.IsIsolated {
 				continue
@@ -333,15 +352,30 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 						}
 					}
 					if !dup {
-						dx := n[0] - mainPlantation.Position[0]
-						dy := n[1] - mainPlantation.Position[1]
-						if dx < 0 { dx = -dx }
-						if dy < 0 { dy = -dy }
-						dist := dx + dy
-						prio := dist // Farther = higher priority (extends chain)
+						prio := 100
+
+						// Охота за золотыми клетками (x%7==0, y%7==0)
 						if n[0]%7 == 0 && n[1]%7 == 0 {
-							prio += 50 // Golden cell bonus
+							prio += 5000 // Huge bonus
 						}
+
+						// Mesh-сеть (Связность): чем больше наших плантаций рядом, тем надежнее узел
+						adjCount := 0
+						for _, p2 := range arena.Plantations {
+							dx := p2.Position[0] - n[0]
+							if dx < 0 {
+								dx = -dx
+							}
+							dy := p2.Position[1] - n[1]
+							if dy < 0 {
+								dy = -dy
+							}
+							if dx+dy <= 2 {
+								adjCount++
+							}
+						}
+						prio += adjCount * 50
+
 						cands = append(cands, candidate{n, prio})
 					}
 				}
@@ -376,7 +410,6 @@ func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 		tierMap[t.Name] = t
 	}
 
-	// Экстренная покупка: землетрясение через <=3 хода
 	for _, m := range arena.MeteoForecasts {
 		if m.Kind == "earthquake" && m.TurnsUntil <= 3 {
 			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current < t.Max {
@@ -385,22 +418,15 @@ func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 		}
 	}
 
-	// Стратегический приоритет:
-	// 1. settlement_limit — больше плантаций = больше очков
-	// 2. decay_mitigation — стройки выживают дольше без прогресса (DS: 10→4)
-	// 3. earthquake_mitigation — стройки переживают землетрясение (10→4)
-	// 4. beaver_damage_mitigation — бобры убивают всё (15→5)
-	// 5. max_hp — больше HP = больше живучесть
-	// 6. signal_range — можно строить через посредников
-	// 7. repair_power / vision_range — полезно, но не критично
+	// Стратегический приоритет согласно нашему гайду:
 	priority := []string{
-		"settlement_limit",
-		"decay_mitigation",
+		"settlement_limit", // Больше баз - больше фарм
+		"signal_range",     // Позволяет строить/бить через прорехи в сети
+		"repair_power",     // Прочность
+		"max_hp",
 		"earthquake_mitigation",
 		"beaver_damage_mitigation",
-		"max_hp",
-		"signal_range",
-		"repair_power",
+		"decay_mitigation",
 		"vision_range",
 	}
 	for _, name := range priority {

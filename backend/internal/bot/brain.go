@@ -333,12 +333,37 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		// Сначала ищем свободные клетки РЯДОМ С ЦУ (escape route — highest priority)
 		if mainPlantation.Hp > 0 {
 			cuProg := b.getCellProgress(arena, mainPlantation.Position)
+			hasSafeAdjacent := false
+			
+			// Проверяем, есть ли уже безопасная плантация ИЛИ стройка
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
-				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) && isSafeFromSandstorms(n) {
-					// Чем выше прогресс ЦУ, тем больше приоритет escape route
-					prio := 1000 + cuProg
-					cands = append(cands, candidate{n, prio})
+				if b.isUnderConstruction(arena, n) {
+					hasSafeAdjacent = true
+					break
+				}
+				for _, p := range arena.Plantations {
+					if p.Position[0] == n[0] && p.Position[1] == n[1] && p.Hp > 0 {
+						if b.getCellProgress(arena, p.Position) < cuProg {
+							hasSafeAdjacent = true
+							break
+						}
+					}
+				}
+				if hasSafeAdjacent {
+					break
+				}
+			}
+
+			// Если нет спасательного выхода — строим РОВНО ОДИН
+			if !hasSafeAdjacent {
+				for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+					n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
+					if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) && isSafeFromSandstorms(n) {
+						prio := 1000 + cuProg
+						cands = append(cands, candidate{n, prio})
+						break // Добавили ОДНУ свободную клетку с приоритетом и хватит!
+					}
 				}
 			}
 		}

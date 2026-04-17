@@ -7,7 +7,12 @@ const canvas = document.getElementById('arena-canvas');
 const ctx = canvas.getContext('2d');
 
 let isRunning = false;
-let currentZoom = 1;
+let scale = 1;
+let offsetX = 0;
+let offsetY = 0;
+let isDragging = false;
+let startDragX = 0;
+let startDragY = 0;
 const BASE_CELL_SIZE = 3;
 
 // UI Setup
@@ -21,15 +26,7 @@ btnStop.addEventListener('click', async () => {
     updateControls(false);
 });
 
-document.getElementById('canvas-container').addEventListener('wheel', (e) => {
-    if(e.ctrlKey) {
-        e.preventDefault();
-        currentZoom += e.deltaY * -0.01;
-        currentZoom = Math.min(Math.max(0.5, currentZoom), 10);
-        canvas.style.transform = `scale(${currentZoom})`;
-        canvas.style.transformOrigin = "top left";
-    }
-}, {passive: false});
+
 
 function updateControls(running) {
     isRunning = running;
@@ -38,6 +35,43 @@ function updateControls(running) {
     document.getElementById('val-state').textContent = running ? 'ON' : 'OFF';
     document.getElementById('val-state').style.color = running ? 'var(--green)' : 'var(--red)';
 }
+
+// Map Controls Setup
+const container = document.getElementById('canvas-container');
+
+container.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startDragX = e.clientX - offsetX;
+    startDragY = e.clientY - offsetY;
+    container.style.cursor = 'grabbing';
+});
+window.addEventListener('mouseup', () => {
+    isDragging = false;
+    container.style.cursor = 'grab';
+});
+window.addEventListener('mousemove', (e) => {
+    if(!isDragging) return;
+    offsetX = e.clientX - startDragX;
+    offsetY = e.clientY - startDragY;
+});
+container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomIntensity = 0.1;
+    const wheel = e.deltaY < 0 ? 1 : -1;
+    const zoom = Math.exp(wheel * zoomIntensity);
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    offsetX = mouseX - (mouseX - offsetX) * zoom;
+    offsetY = mouseY - (mouseY - offsetY) * zoom;
+    scale *= zoom;
+}, {passive: false});
+
+document.getElementById('btn-zoom-in').onclick = () => { offsetX = canvas.width/2 - (canvas.width/2 - offsetX) * 1.2; offsetY = canvas.height/2 - (canvas.height/2 - offsetY) * 1.2; scale *= 1.2; };
+document.getElementById('btn-zoom-out').onclick = () => { offsetX = canvas.width/2 - (canvas.width/2 - offsetX) / 1.2; offsetY = canvas.height/2 - (canvas.height/2 - offsetY) / 1.2; scale /= 1.2; };
+document.getElementById('btn-zoom-reset').onclick = () => { scale = 1; offsetX = 0; offsetY = 0; };
 
 async function fetchState() {
     try {
@@ -108,14 +142,17 @@ function renderMap(arena) {
     const mapH = arena.size[1];
     const cs = BASE_CELL_SIZE;
     
-    if (canvas.width !== mapW * cs) {
-        canvas.width = mapW * cs;
-        canvas.height = mapH * cs;
+    if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
     }
 
-    // clear background
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
     ctx.fillStyle = '#0f111a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
 
     // X,Y multiplier highlighting (cells with coords %7==0 get 1.5x points)
     ctx.fillStyle = 'rgba(255,255,255,0.03)';

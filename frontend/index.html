@@ -52,9 +52,16 @@
 
         <!-- Map Visualization -->
         <section class="map-view glass">
-            <h2>Arena Map</h2>
-            <div class="canvas-container" id="canvas-container">
-               <canvas id="arena-canvas" width="800" height="800"></canvas>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h2 style="margin:0;">Arena Map</h2>
+                <div style="display: flex; gap: 5px;">
+                    <button id="btn-zoom-in" style="padding: 2px 8px;">➕</button>
+                    <button id="btn-zoom-out" style="padding: 2px 8px;">➖</button>
+                    <button id="btn-zoom-reset" style="padding: 2px 8px;">Reset</button>
+                </div>
+            </div>
+            <div class="canvas-container" id="canvas-container" style="overflow: hidden; cursor: grab;">
+               <canvas id="arena-canvas"></canvas>
             </div>
             <div class="legend" style="margin-top: 10px; font-size: 0.9em; color:#aaa;">
                🟦 Ours | 🟥 Enemy | 🟨 Beavers | 🟩 Terraformed | 🟪 Construction | 👽 Sandstorm

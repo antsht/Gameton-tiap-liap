@@ -9,18 +9,8 @@ import (
 	"piratesbot/internal/api"
 )
 
-type Strategy string
-
-const (
-	StrategyExpansion       Strategy = "expansion"
-	StrategyGoldenExpansion Strategy = "golden_expansion"
-	StrategyHuntBeavers     Strategy = "hunt_beavers"
-	StrategyAttack          Strategy = "attack"
-)
-
 type State struct {
 	IsRunning bool
-	Strategy  Strategy
 	TurnNo    int
 	ArenaLock sync.RWMutex
 	Arena     *api.PlayerResponse
@@ -40,7 +30,6 @@ func NewBot(client *api.Client) *Bot {
 		client: client,
 		state: &State{
 			IsRunning: false,
-			Strategy:  StrategyExpansion,
 		},
 		logCh: make(chan string, 1000), // Buffer for logs
 	}
@@ -50,12 +39,7 @@ func (b *Bot) State() *State {
 	return b.state
 }
 
-func (b *Bot) SetStrategy(s Strategy) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.state.Strategy = s
-	b.Log(fmt.Sprintf("Strategy changed to: %s", s))
-}
+
 
 func (b *Bot) Start() {
 	b.mu.Lock()

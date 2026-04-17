@@ -26,7 +26,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/logs", s.handleLogs)
 	s.mux.HandleFunc("/api/start", s.handleStart)
 	s.mux.HandleFunc("/api/stop", s.handleStop)
-	s.mux.HandleFunc("/api/strategy", s.handleStrategy)
 
 	// Since we execute from `backend/`, frontend is at `../frontend`
 	fs := http.FileServer(http.Dir(`d:\!PROGRAMMING\!pirates\frontend`))

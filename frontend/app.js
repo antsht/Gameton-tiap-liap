@@ -2,7 +2,6 @@ const API_BASE = '/api';
 
 const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
-const selStrategy = document.getElementById('strategy-select');
 const logContainer = document.getElementById('log-container');
 const canvas = document.getElementById('arena-canvas');
 const ctx = canvas.getContext('2d');
@@ -20,14 +19,6 @@ btnStart.addEventListener('click', async () => {
 btnStop.addEventListener('click', async () => {
     await fetch(`${API_BASE}/stop`, { method: 'POST' });
     updateControls(false);
-});
-
-selStrategy.addEventListener('change', async (e) => {
-    await fetch(`${API_BASE}/strategy`, { 
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ strategy: e.target.value })
-    });
 });
 
 document.getElementById('canvas-container').addEventListener('wheel', (e) => {

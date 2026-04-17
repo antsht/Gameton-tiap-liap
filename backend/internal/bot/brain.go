@@ -48,16 +48,11 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		return
 	}
 
-	b.mu.Lock()
-	strat := b.state.Strategy
-	b.mu.Unlock()
-
 	cmd := api.PlayerCommand{}
 
 	// Upgrade logic
 	points := arena.PlantationUpgrades.Points
 	if points > 0 {
-		// Try to max settlement limit first
 		upgradeChosen := false
 		for _, t := range arena.PlantationUpgrades.Tiers {
 			if t.Name == "settlement_limit" && t.Current < t.Max {
@@ -72,17 +67,7 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		b.Log(fmt.Sprintf("Buying upgrade: %s", cmd.PlantationUpgrade))
 	}
 
-	// Calculate moves based on strategy
-	switch strat {
-	case StrategyExpansion:
-		cmd.Command = b.computeExpansion(arena, false)
-	case StrategyGoldenExpansion:
-		cmd.Command = b.computeExpansion(arena, true)
-	case StrategyHuntBeavers:
-		cmd.Command = b.computeHuntBeavers(arena)
-	case StrategyAttack:
-		cmd.Command = b.computeAttack(arena)
-	}
+	cmd.Command = b.computeHiveMind(arena)
 
 	if len(cmd.Command) > 0 || cmd.PlantationUpgrade != "" || len(cmd.RelocateMain) > 0 {
 		err := b.client.PostCommand(cmd)
@@ -90,80 +75,110 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			b.Log(fmt.Sprintf("Err sending cmd: %v", err))
 		} else {
 			if len(cmd.Command) > 0 {
-				b.Log(fmt.Sprintf("Sent %d commands [%s]", len(cmd.Command), strat))
+				b.Log(fmt.Sprintf("HiveMind sent %d local commands", len(cmd.Command)))
 			}
 		}
 	}
 }
 
-// Very simple expansion: pick a random plantation, find nearest empty space, try to build
-func (b *Bot) computeExpansion(arena *api.PlayerResponse, prioritizeGolden bool) []api.PlantationAction {
+func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction {
 	var actions []api.PlantationAction
 
-	if len(arena.Plantations) >= b.getMaxPlantations(arena) {
-		return actions
-	}
-
+	idle := make(map[string]api.Plantation)
+	var mainPlantation api.Plantation
 	for _, p := range arena.Plantations {
-		neighbors := [][]int{
-			{p.Position[0] - 1, p.Position[1]},
-			{p.Position[0] + 1, p.Position[1]},
-			{p.Position[0], p.Position[1] - 1},
-			{p.Position[0], p.Position[1] + 1},
+		idle[p.Id] = p
+		if p.IsMain {
+			mainPlantation = p
 		}
+	}
 
-		var normalChoice []int
+	actionRange := arena.ActionRange
+	if actionRange == 0 {
+		actionRange = 2
+	}
 
-		for _, n := range neighbors {
-			if !b.isOccupied(arena, n) {
-				if n[0]%7 == 0 && n[1]%7 == 0 {
-					return append(actions, api.PlantationAction{ Path: [][]int{p.Position, p.Position, n} })
+	distance := func(p1, p2 []int) int {
+		dx := p1[0] - p2[0]
+		if dx < 0 { dx = -dx }
+		dy := p1[1] - p2[1]
+		if dy < 0 { dy = -dy }
+		if dx > dy { return dx }
+		return dy
+	}
+
+	assign := func(target []int, needed int) {
+		assigned := 0
+		for id, p := range idle {
+			if assigned >= needed {
+				break
+			}
+			if distance(p.Position, target) <= actionRange {
+				actions = append(actions, api.PlantationAction{
+					Path: [][]int{p.Position, p.Position, target},
+				})
+				delete(idle, id)
+				assigned++
+			}
+		}
+	}
+
+	// 1. Defend CU
+	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 40 {
+		assign(mainPlantation.Position, 5)
+	}
+
+	// 2. Hunt Beavers (Prize x10)
+	for _, bvr := range arena.Beavers {
+		assign(bvr.Position, 4)
+	}
+
+	// 3. Finish Constructions
+	for _, constr := range arena.Construction {
+		assign(constr.Position, 3)
+	}
+
+	// 4. Aggressive Expansion
+	limit := b.getMaxPlantations(arena)
+	currentCount := len(arena.Plantations) + len(arena.Construction)
+
+	if currentCount < limit && len(idle) > 0 {
+		candidates := make(map[string][]int)
+		for _, p := range arena.Plantations {
+			// Find adjacent empty cells
+			for _, offset := range [][]int{{-1,0},{1,0},{0,-1},{0,1},{-1,-1},{1,-1},{-1,1},{1,1}} {
+				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
+				if !b.isOccupied(arena, n) {
+					key := fmt.Sprintf("%d,%d", n[0], n[1])
+					candidates[key] = n
 				}
-				normalChoice = n
 			}
 		}
 
-		if !prioritizeGolden && normalChoice != nil {
-			return append(actions, api.PlantationAction{ Path: [][]int{p.Position, p.Position, normalChoice} })
+		// Prioritize golden cells
+		for key, n := range candidates {
+			if len(idle) == 0 || currentCount >= limit { break }
+			if n[0]%7 == 0 && n[1]%7 == 0 {
+				assign(n, 3) 
+				currentCount++
+				delete(candidates, key)
+			}
+		}
+
+		// Fill normal cells
+		for _, n := range candidates {
+			if len(idle) == 0 || currentCount >= limit { break }
+			assign(n, 2)
+			currentCount++
 		}
 	}
 
-	// Fallback to normal if golden not found nearby but asked for golden
-	if prioritizeGolden {
-		return b.computeExpansion(arena, false)
-	}
-	return actions
-}
-
-func (b *Bot) computeHuntBeavers(arena *api.PlayerResponse) []api.PlantationAction {
-	var actions []api.PlantationAction
-	if len(arena.Plantations) == 0 {
-		return actions
-	}
-
-	for _, bvr := range arena.Beavers {
-		// Just order the main to attack it for now
-		actions = append(actions, api.PlantationAction{
-			Path: [][]int{arena.Plantations[0].Position, arena.Plantations[0].Position, bvr.Position},
-		})
-		return actions // 1 action enough
-	}
-
-	// fallback
-	return b.computeExpansion(arena, false)
-}
-
-func (b *Bot) computeAttack(arena *api.PlayerResponse) []api.PlantationAction {
-	var actions []api.PlantationAction
-	// TODO: target enemy or beavers
 	return actions
 }
 
 func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {
 	for _, t := range arena.PlantationUpgrades.Tiers {
 		if t.Name == "settlement_limit" {
-			// Base is 30, each upgrade +1. Let's just trust current level or logic.
-			// Actually max limit defaults to 30.
 			return 30 + t.Current
 		}
 	}
@@ -171,7 +186,9 @@ func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {
 }
 
 func (b *Bot) isOccupied(arena *api.PlayerResponse, pos []int) bool {
-	// check mountains, walls, other plantations
+	if pos[0] < 0 || pos[1] < 0 || pos[0] >= arena.Size[0] || pos[1] >= arena.Size[1] {
+		return true // out of bounds
+	}
 	for _, m := range arena.Mountains {
 		if m[0] == pos[0] && m[1] == pos[1] {
 			return true
@@ -187,13 +204,10 @@ func (b *Bot) isOccupied(arena *api.PlayerResponse, pos []int) bool {
 			return true
 		}
 	}
-	for _, c := range arena.Cells {
-		if c.Position[0] == pos[0] && c.Position[1] == pos[1] && c.TerraformationProgress >= 100 {
-			// Actually cell is ok to build on unless there's a plantation
+	for _, c := range arena.Construction {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return true
 		}
-	}
-	if pos[0] < 0 || pos[1] < 0 || pos[0] >= arena.Size[0] || pos[1] >= arena.Size[1] {
-		return true // out of bounds
 	}
 	return false
 }

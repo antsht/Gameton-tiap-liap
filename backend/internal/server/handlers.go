@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"piratesbot/internal/bot"
 )
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
@@ -39,18 +38,4 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) handleStrategy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Strategy bot.Strategy `json:"strategy"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-	s.b.SetStrategy(req.Strategy)
-	w.WriteHeader(http.StatusOK)
-}
+

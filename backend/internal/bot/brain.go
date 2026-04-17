@@ -287,6 +287,11 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		assign(bvr.Position, 4)
 	}
 
+	// 2.5 Sabotage Enemies (Prize x1000/1500)
+	for _, enemy := range arena.Enemy {
+		assign(enemy.Position, 4)
+	}
+
 	// 3. Finish Constructions — max priority, push hard
 	for _, constr := range arena.Construction {
 		assign(constr.Position, 5)
@@ -303,12 +308,34 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		}
 		var cands []candidate
 
+		isSafeFromSandstorms := func(pos []int) bool {
+			for _, m := range arena.MeteoForecasts {
+				if m.Kind == "sandstorm" {
+					if m.Position != nil && len(m.Position) == 2 {
+						dx := pos[0] - m.Position[0]
+						dy := pos[1] - m.Position[1]
+						if dx*dx+dy*dy <= m.Radius*m.Radius {
+							return false
+						}
+					}
+					if m.NextPosition != nil && len(m.NextPosition) == 2 {
+						dx := pos[0] - m.NextPosition[0]
+						dy := pos[1] - m.NextPosition[1]
+						if dx*dx+dy*dy <= m.Radius*m.Radius {
+							return false
+						}
+					}
+				}
+			}
+			return true
+		}
+
 		// Сначала ищем свободные клетки РЯДОМ С ЦУ (escape route — highest priority)
 		if mainPlantation.Hp > 0 {
 			cuProg := b.getCellProgress(arena, mainPlantation.Position)
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
-				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) {
+				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) && isSafeFromSandstorms(n) {
 					// Чем выше прогресс ЦУ, тем больше приоритет escape route
 					prio := 100 + cuProg
 					cands = append(cands, candidate{n, prio})
@@ -323,7 +350,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			}
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
-				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) {
+				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) && isSafeFromSandstorms(n) {
 					// Deduplicate
 					dup := false
 					for _, c := range cands {
@@ -342,6 +369,30 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 						if n[0]%7 == 0 && n[1]%7 == 0 {
 							prio += 50 // Golden cell bonus
 						}
+
+						// BEAVER & ENEMY CHASING
+						minBvrDist := 9999
+						for _, bvr := range arena.Beavers {
+							bDist := distance(n, bvr.Position)
+							if bDist < minBvrDist {
+								minBvrDist = bDist
+							}
+						}
+						minEnmDist := 9999
+						for _, enm := range arena.Enemy {
+							eDist := distance(n, enm.Position)
+							if eDist < minEnmDist {
+								minEnmDist = eDist
+							}
+						}
+
+						if minBvrDist < 20 {
+							prio += (20 - minBvrDist) * 10 // Тянет цепочку к бобру (до +200 очков)
+						}
+						if minEnmDist < 20 {
+							prio += (20 - minEnmDist) * 8  // Тянет цепочку к врагу (до +160 очков)
+						}
+
 						cands = append(cands, candidate{n, prio})
 					}
 				}

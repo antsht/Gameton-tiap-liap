@@ -337,7 +337,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) && isSafeFromSandstorms(n) {
 					// Чем выше прогресс ЦУ, тем больше приоритет escape route
-					prio := 100 + cuProg
+					prio := 1000 + cuProg
 					cands = append(cands, candidate{n, prio})
 				}
 			}

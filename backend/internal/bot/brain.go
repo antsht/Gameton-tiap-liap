@@ -73,26 +73,71 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 	if mainPos != nil {
 		progress := b.getCellProgress(arena, mainPos)
 
-		// Превентивная эвакуация: начинаем на 50% (осталось 10 ходов)
-		// Ищем плантацию с МИНИМАЛЬНЫМ прогрессом терраформирования
+		// ЭВАКУАЦИЯ: relocateMain работает ТОЛЬКО со смежной (кардинально, расст=1) плантацией!
+		// Начинаем искать на 50% — через 10 ходов клетка на 100% и плантация исчезнет.
 		if progress >= 50 || mainHp <= 20 {
-			bestProg := 999
+			bestProg := progress // Ищем ЛЮБУЮ смежную с прогрессом МЕНЬШЕ нашего
 			var bestPos []int
 			for _, p := range arena.Plantations {
 				if p.IsMain || p.IsIsolated {
 					continue
 				}
+				dx := p.Position[0] - mainPos[0]
+				dy := p.Position[1] - mainPos[1]
+				if dx < 0 { dx = -dx }
+				if dy < 0 { dy = -dy }
+				if dx+dy != 1 {
+					continue
+				}
 				pProg := b.getCellProgress(arena, p.Position)
-				if p.Hp >= 20 && pProg < bestProg {
+				if p.Hp >= 15 && pProg < bestProg {
 					bestProg = pProg
 					bestPos = []int{p.Position[0], p.Position[1]}
 				}
 			}
-			// Переезжаем если нашли кого-то со значительно меньшим прогрессом
-			if bestPos != nil && bestProg < progress-10 {
+			if bestPos != nil {
 				from := []int{mainPos[0], mainPos[1]}
 				cmd.RelocateMain = [][]int{from, bestPos}
 				b.Log(fmt.Sprintf("EVACUATE CU %v→%v (our=%d%% target=%d%%)", from, bestPos, progress, bestProg))
+			}
+		}
+
+		// ОБЯЗАТЕЛЬНО: если нет аварийного выхода — строим его!
+		// Проверяем есть ли хотя бы одна смежная плантация или стройка рядом с ЦУ
+		hasAdjacentEscape := false
+		for _, p := range arena.Plantations {
+			if p.IsMain { continue }
+			dx := p.Position[0] - mainPos[0]
+			dy := p.Position[1] - mainPos[1]
+			if dx < 0 { dx = -dx }
+			if dy < 0 { dy = -dy }
+			if dx+dy == 1 {
+				pProg := b.getCellProgress(arena, p.Position)
+				if pProg < progress { // Есть куда бежать
+					hasAdjacentEscape = true
+					break
+				}
+			}
+		}
+		if !hasAdjacentEscape {
+			// Нет выхода! Экстренно начинаем стройку рядом с ЦУ
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+				n := []int{mainPos[0] + offset[0], mainPos[1] + offset[1]}
+				if !b.isOccupied(arena, n) {
+					// Проверяем нет ли уже стройки тут
+					alreadyBuilding := false
+					for _, c := range arena.Construction {
+						if c.Position[0] == n[0] && c.Position[1] == n[1] {
+							alreadyBuilding = true
+							break
+						}
+					}
+					if !alreadyBuilding {
+						b.Log(fmt.Sprintf("EMERGENCY BUILD escape route at %v for CU at %v (prog=%d%%)", n, mainPos, progress))
+						// Будет построено в computeHiveMind через обычный assign
+					}
+					break
+				}
 			}
 		}
 	}
@@ -189,30 +234,42 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		assign(constr.Position, 5)
 	}
 
-	// 4. Aggressive Expansion — prioritize extending chain AWAY from CU
+	// 4. Linear Chain Expansion — ALWAYS build escape route for CU first!
 	limit := b.getMaxPlantations(arena)
 	currentCount := len(arena.Plantations) + len(arena.Construction)
 
 	if currentCount < limit && len(idle) > 0 {
 		type candidate struct {
-			pos  []int
-			dist int
-			gold bool
+			pos      []int
+			priority int // higher = build first
 		}
 		var cands []candidate
 
+		// Сначала ищем свободные клетки РЯДОМ С ЦУ (escape route — highest priority)
+		if mainPlantation.Hp > 0 {
+			cuProg := b.getCellProgress(arena, mainPlantation.Position)
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
+				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) {
+					// Чем выше прогресс ЦУ, тем больше приоритет escape route
+					prio := 100 + cuProg
+					cands = append(cands, candidate{n, prio})
+				}
+			}
+		}
+
+		// Затем ищем клетки на краю цепочки (extending the chain — medium priority)
 		for _, p := range arena.Plantations {
 			if p.IsIsolated {
 				continue
 			}
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
-				if !b.isOccupied(arena, n) {
-					key := fmt.Sprintf("%d,%d", n[0], n[1])
+				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) {
 					// Deduplicate
 					dup := false
 					for _, c := range cands {
-						if fmt.Sprintf("%d,%d", c.pos[0], c.pos[1]) == key {
+						if c.pos[0] == n[0] && c.pos[1] == n[1] {
 							dup = true
 							break
 						}
@@ -223,23 +280,20 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 						if dx < 0 { dx = -dx }
 						if dy < 0 { dy = -dy }
 						dist := dx + dy
-						gold := n[0]%7 == 0 && n[1]%7 == 0
-						cands = append(cands, candidate{n, dist, gold})
+						prio := dist // Farther = higher priority (extends chain)
+						if n[0]%7 == 0 && n[1]%7 == 0 {
+							prio += 50 // Golden cell bonus
+						}
+						cands = append(cands, candidate{n, prio})
 					}
 				}
 			}
 		}
 
-		// Sort: gold first, then by distance from CU (farthest first — extends chain)
+		// Sort by priority descending
 		for i := 0; i < len(cands); i++ {
 			for j := i + 1; j < len(cands); j++ {
-				swap := false
-				if cands[j].gold && !cands[i].gold {
-					swap = true
-				} else if cands[j].gold == cands[i].gold && cands[j].dist > cands[i].dist {
-					swap = true
-				}
-				if swap {
+				if cands[j].priority > cands[i].priority {
 					cands[i], cands[j] = cands[j], cands[i]
 				}
 			}
@@ -315,6 +369,15 @@ func (b *Bot) getCellProgress(arena *api.PlayerResponse, pos []int) int {
 		}
 	}
 	return 0
+}
+
+func (b *Bot) isUnderConstruction(arena *api.PlayerResponse, pos []int) bool {
+	for _, c := range arena.Construction {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *Bot) isOccupied(arena *api.PlayerResponse, pos []int) bool {

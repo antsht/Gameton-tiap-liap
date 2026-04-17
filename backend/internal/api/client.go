@@ -27,13 +27,11 @@ func NewClient(baseURL, token string) *Client {
 
 func (c *Client) req(method, path string, body interface{}, out interface{}) error {
 	var reqBody io.Reader
-	var bodyBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("marshal err: %w", err)
 		}
-		bodyBytes = b
 		reqBody = bytes.NewReader(b)
 	}
 

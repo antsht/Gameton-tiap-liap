@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -52,6 +54,12 @@ func (c *Client) req(method, path string, body interface{}, out interface{}) err
 	defer resp.Body.Close()
 	
 	respBodyBytes, _ := io.ReadAll(resp.Body)
+
+	// Сохраняем сырой ответ от сервера в отдельную папку
+	os.MkdirAll("logs/api_raw", 0755)
+	safePath := strings.ReplaceAll(path, "/", "_")
+	filename := fmt.Sprintf("logs/api_raw/%d_%s%s.json", time.Now().UnixNano(), method, safePath)
+	os.WriteFile(filename, respBodyBytes, 0644)
 
 	if resp.StatusCode >= 400 {
 		var publicErr PublicError

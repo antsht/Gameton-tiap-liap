@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"piratesbot/internal/api"
 	"piratesbot/internal/bot"
@@ -9,12 +11,12 @@ import (
 )
 
 func main() {
-	// keyPath := `d:\!PROGRAMMING\!pirates\TASK\X-API-Key`
-	// keyBytes, err := os.ReadFile(keyPath)
-	// if err != nil {
-	// 	log.Fatalf("Could not read API Key from %s: %v", keyPath, err)
-	// }
-	token := "34c69968-5334-4619-8253-57433ac44e7d"
+	keyPath := `../TASK/X-API-Key`
+	keyBytes, err := os.ReadFile(keyPath)
+	if err != nil {
+		log.Fatalf("Could not read API Key from %s: %v", keyPath, err)
+	}
+	token := strings.TrimSpace(string(keyBytes))
 
 	log.Printf("Read API Token, len %d", len(token))
 

@@ -7,23 +7,19 @@ import (
 )
 
 func (b *Bot) loop() {
-	ticker := time.NewTicker(300 * time.Millisecond) // Poll frequently to catch turn change
-	defer ticker.Stop()
-
 	lastProcessedTurn := -1
 
 	for {
 		select {
 		case <-b.stopCh:
 			return
-		case <-ticker.C:
+		default:
 		}
 
 		arena, err := b.client.GetArena()
 		if err != nil {
-			// If error, log it so we see it in dashboard
 			b.Log(fmt.Sprintf("API Arena Error: %v", err))
-			time.Sleep(1 * time.Second) // Don't spam too fast on error
+			time.Sleep(1500 * time.Millisecond) // Back off on 429 or any error
 			continue
 		}
 
@@ -32,12 +28,17 @@ func (b *Bot) loop() {
 		b.state.TurnNo = arena.TurnNo
 		b.state.ArenaLock.Unlock()
 
-		if arena.TurnNo == lastProcessedTurn {
-			continue // Already processed this turn
+		if arena.TurnNo != lastProcessedTurn {
+			b.processTurn(arena)
+			lastProcessedTurn = arena.TurnNo
 		}
 
-		b.processTurn(arena)
-		lastProcessedTurn = arena.TurnNo
+		// Умный тайминг до следующего запроса, чтобы не спамить API
+		waitMs := int(arena.NextTurnIn * 1000) + 50
+		if waitMs < 200 {
+			waitMs = 200
+		}
+		time.Sleep(time.Duration(waitMs) * time.Millisecond)
 	}
 }
 
@@ -74,7 +75,11 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 	// Calculate moves based on strategy
 	switch strat {
 	case StrategyExpansion:
-		cmd.Command = b.computeExpansion(arena)
+		cmd.Command = b.computeExpansion(arena, false)
+	case StrategyGoldenExpansion:
+		cmd.Command = b.computeExpansion(arena, true)
+	case StrategyHuntBeavers:
+		cmd.Command = b.computeHuntBeavers(arena)
 	case StrategyAttack:
 		cmd.Command = b.computeAttack(arena)
 	}
@@ -84,23 +89,22 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		if err != nil {
 			b.Log(fmt.Sprintf("Err sending cmd: %v", err))
 		} else {
-			b.Log(fmt.Sprintf("Sent %d commands", len(cmd.Command)))
+			if len(cmd.Command) > 0 {
+				b.Log(fmt.Sprintf("Sent %d commands [%s]", len(cmd.Command), strat))
+			}
 		}
 	}
 }
 
 // Very simple expansion: pick a random plantation, find nearest empty space, try to build
-func (b *Bot) computeExpansion(arena *api.PlayerResponse) []api.PlantationAction {
+func (b *Bot) computeExpansion(arena *api.PlayerResponse, prioritizeGolden bool) []api.PlantationAction {
 	var actions []api.PlantationAction
 
-	// Limit construction to not spam API and not lose existing plantations randomly
-	// Normally we want an advanced logic here
 	if len(arena.Plantations) >= b.getMaxPlantations(arena) {
 		return actions
 	}
 
 	for _, p := range arena.Plantations {
-		// Find adjacent empty cells
 		neighbors := [][]int{
 			{p.Position[0] - 1, p.Position[1]},
 			{p.Position[0] + 1, p.Position[1]},
@@ -108,19 +112,45 @@ func (b *Bot) computeExpansion(arena *api.PlayerResponse) []api.PlantationAction
 			{p.Position[0], p.Position[1] + 1},
 		}
 
+		var normalChoice []int
+
 		for _, n := range neighbors {
 			if !b.isOccupied(arena, n) {
-				// Construct
-				actions = append(actions, api.PlantationAction{
-					Path: [][]int{p.Position, p.Position, n},
-				})
-				// Just 1 expansion per turn for now for simplicity
-				return actions
+				if n[0]%7 == 0 && n[1]%7 == 0 {
+					return append(actions, api.PlantationAction{ Path: [][]int{p.Position, p.Position, n} })
+				}
+				normalChoice = n
 			}
+		}
+
+		if !prioritizeGolden && normalChoice != nil {
+			return append(actions, api.PlantationAction{ Path: [][]int{p.Position, p.Position, normalChoice} })
 		}
 	}
 
+	// Fallback to normal if golden not found nearby but asked for golden
+	if prioritizeGolden {
+		return b.computeExpansion(arena, false)
+	}
 	return actions
+}
+
+func (b *Bot) computeHuntBeavers(arena *api.PlayerResponse) []api.PlantationAction {
+	var actions []api.PlantationAction
+	if len(arena.Plantations) == 0 {
+		return actions
+	}
+
+	for _, bvr := range arena.Beavers {
+		// Just order the main to attack it for now
+		actions = append(actions, api.PlantationAction{
+			Path: [][]int{arena.Plantations[0].Position, arena.Plantations[0].Position, bvr.Position},
+		})
+		return actions // 1 action enough
+	}
+
+	// fallback
+	return b.computeExpansion(arena, false)
 }
 
 func (b *Bot) computeAttack(arena *api.PlayerResponse) []api.PlantationAction {

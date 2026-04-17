@@ -12,8 +12,10 @@ import (
 type Strategy string
 
 const (
-	StrategyExpansion Strategy = "expansion"
-	StrategyAttack    Strategy = "attack"
+	StrategyExpansion       Strategy = "expansion"
+	StrategyGoldenExpansion Strategy = "golden_expansion"
+	StrategyHuntBeavers     Strategy = "hunt_beavers"
+	StrategyAttack          Strategy = "attack"
 )
 
 type State struct {

@@ -1,0 +1,578 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Геймтон DatsBlack",
+    "version": "v1",
+    "description": "\n<img src='./img/1.jpeg' class='image1' />\n\n**Легенда:** чтобы стать Сантой, нужно отправить всех пиратов метким выстрелом к новогоднему столу и удержаться дольше всех на карте.\n\n  **Этапы** (время — UTC+03:00):\n\n  - 1-й день — 23.12.2023: с 15:00 по 22:00 — тренировочный (deathmatch)\n  - 2-й день — 24.12.2023:\n    - Тренировочные раунды:\n      - с 10:00 по 11:00 — deathmatch\n      - с 11:00 по 14:00 — battle royale\n    - Финальные раунды:\n      - с 14:00 по 18:00 — battle royale\n      \n    Расписание финальных раундов будет опубликовано в чате \"Закулисье геймтона DatsBlack\" за час до их начала.\n  \n### Пиратам предоставляется:\n  1. Карта\n  2. Флот из 10 кораблей\n  3. API\n \n# Карта\n\n  Рельеф карты пираты видят сразу. На карте море, за пределами карты - **берег**. Есть **острова**, которые надо объезжать, чтобы не разбить вдребезги свои корабли.\n  \n  Острова представляют собой массив данных\n  [\n    {\n      \"map\": [\n       [ 1, 1, 1],\n       [ 1, 1, 0],\n      ],\n     \"start\": [20,15]\n    },...\n  ] \n\n  Где start - точка начала острова (левая верхняя точка).\n  Массив “map” - набор клеток острова где 1 - суша, а 0 - вода.\n  \n  <img src='./img/5.png' class='image5' />\n\n  \n  Точка с координатами (0,0) находится в левом верхнем углу. Карта расположена в положительном направлении осей системы координат.\n  \n  <img src='./img/2.jpg' class='image2' />\n  \n# Механика игры\n\n  Игра схожа по механике с пошаговой стратегией, в нашем случае шагом мы называем **тик**. \n  \n  Тик длится ~3 секунды, в течение этого времени участники могут: \n  \n  - Отправить команды на управление флотом. Команды будут обработаны в конце текущего тика, но до начала следующего.\n  - Получить данные по обстановке (API скана), которые актуальны для текущего тика.\n\nВ целом игровой процесс будет выглядеть как повторение каждый тик двух команд: на получение данных (API скана) и на управление своим флотом.\n\n  Время обработки тика занимает примерно 0.3-0.4 секунды.\n\n# Корабли\n\n  У каждой пиратской команды есть 10 кораблей:\n  - 1 х 2 клеток — 4 шт\n  - 1 х 3 клеток — 3 шт\n  - 1 х 4 клеток — 2 шт\n  - 1 х 5 клеток — 1 шт\n  \n  Начальная скорость кораблей равна нулю, также у корабля есть заданное направление движения в какую-то сторону (direction). Для движения необходимо задать скорость (speed). За один раз можно изменить скорость на определенное значение (maxChangeSpeed).\n  \n  При положительном значении скорости корабль движется в заданном направлении, при значении \"-1\" — пятится назад. Движение задним ходом всегда происходит со скоростью \"1\".\n  \n  Характеристики кораблей (дальность скана и выстрела, скорость движения, перезарядка орудий) на финальных играх могут отличаться от тестовых. \n  \n  Корабль движется только по горизонтали и вертикали. За один раз корабль может повернуть на 90 градусов по часовой часовой стрелке или против неё (значения \"90\" и \"-90\" соответственно). Разворот происходит из хвостовой точки корабля:\n  \n  <img src='./img/3.png' class='image3' />\n  \n  При одновременном движении и повороте приоритет отдается движению. То есть, корабль сначала совершит перемещение, а затем повернёт.\n\n\n# Радар\n\n  Каждый корабль видит вражеские корабли вокруг себя. Центр зоны сканирования — хвостовая часть корабля, зона видимости ограничена радиусом (scanRadius в характеристиках корабля).\n\n  Дополнительно команда может разведать любой участок карты на наличие вражеских кораблей. Раскрытие действует 5 тиков, перезаряжается дальний сканер 15 тиков (с момента применения). Радиус такого сканера равен 60-ти клеткам.\n\n API longScan позволяет расширить данные, которые отображает scan. То есть вы можете запросить информацию по координате, а область вокруг неё станет доступна в основном API scan на 5 тиков. \n\n\n# Огонь\n\n  Каждый корабль может стрелять на заданное расстояние с определенной частотой (cannonRadius и Cooldown в характеристиках корабля).\n\n  Зона попадания — это указанная координатами точка, а также по одной клетке вокруг неё (квадрат из 9-ти клеток).\n  \n  Факт одного попадания по кораблю (независимо от количества задетых клеток) наносит 1 единицу урона.\n\n  Запуск снаряда происходит с кормы (хвостовая часть) корабля до начала движения.\n  Регистрация попадания происходит после того, как все корабли совершили движение.\n  Выстрел попадает по кораблю, если в следующем тике он находится в заданных координатах.\n\n  Будьте осторожны: метким выстрелом можно попасть и по своим кораблям.\n\n\n\n# Столкновения\n\n  При столкновении корабля с **островом**, с **берегом** или с равнозначным по размеру кораблём, корабль разбивается вдребезги.\n\n  При столкновении разных по размеру кораблей, корабль меньшего размера уничтожается, а корабль большего размера получает урон равный размеру меньшего корабля. Факт столкновения не влияет на заданные параметры скорости или поворота.\n\n  Независимо от количества участников в морской аварии, столкновение прорабатывается для каждого из них.\n\n# Лечение\n\n  Если повреждённый корабль не будет поражён на протяжении 8 тиков, он восстанавливает 1 единицу. При отсутствии новых повреждений, корабль продолжает восстановление (каждые 8 тиков — на 1 единицу).\n\n\n# Раунды\n\n  **Deathmatch** — ваш флот возрождается на карте после полного уничтожения.\n\n  **Battle Royale** — со временем пространство начинает сужаться до того момента, пока на поле не останутся корабли только одной команды. Игроки могут запросить информацию (скан) о центре координат сужающейся окружности (зоны) и о её радиусе. Информация о скорости изменения радиуса не предоставляется, известно лишь, что эта скорость не меняется.\n\n  \n  Корабли за пределами этой зоны начинают получать постепенный урон — 1 единица повреждения после 4-х тиков нахождения за пределами зоны. При возвращении корабля в зону, счётчик тиков для него сбрасывается.\n\n Первые 10 тиков корабли не будут получать урон от выстрелов, но могут столкнуться.\n\n# Регистрация на раунд\n\n   Чтобы поучаствовать в битве, необходимо зарегистрироваться на матч.\n\n  **Deathmatch** — можно регистрироваться и выходить из битвы в любой момент.\n\n  **Battle Royale** — можно регистрироваться, пока идёт регистрация на предстоящий раунд. Если регистрация завершена, и идёт матч — необходимо дождаться регистрации на следующий раунд.\n\n# Кто победит\n\n  Победит команда, которая по сумме финальных раундов наберёт наибольшее количество очков: \n\n  1. Очки начисляются в зависимости от **очерёдности** вылета с карты. Несколько команд могут занять одно и то же место (допустим, обе одновременно выбыли за 1 тик).\n  2. **Дополнительно** начисляется 1 очко за каждое **почётное** потопление корабля соперника. В случае если несколько команд “топят” один и тот же корабль соперника в 1 тик, то система методом рандома выбирает какой команде будет зачислено потопление.\n\n**Почётным** потопление будет в том случае, если команда соперника проявила достаточно игровой активности: прошла 500 клеток или совершила попадание по 2-м и более кораблям.\n\n  Расчёт очков производится после завершения раунда.\n\n  **Таблица с количеством очков в зависимости от выбывания с карт:**\n  \n  <img src='./img/4.png' class='image4' />\n\n  В таблице **Порядок** — это очерёдность покидания карты в обратном порядке:\n  \n  - 1 — команда, которая осталась последней на карте\n  - 2 — команда, которая выбыла последней\n  - 3 — выбывшие предпоследними (и так далее)\n  \n  Если команды наберут одинаковое количество очков по итогам всех раундов, будет учитываться место в последнем раунде. Если и в нём одинаковое количество — смотрим в предпоследнем, и так далее.\n\n  Статистику по раундам можно смотреть по ссылке — [Статистика](https://datsteam.dev/datsblack/statistics/).\n  \n# API\nВы уже получили свой токен при регистрации, это означает, что в каждый запрос необходимо добавлять заголовок X-API-Key с полученным вами значением."
+  },
+  "servers": [
+    {
+      "url": "https://datsblack.datsteam.dev"
+    }
+  ],
+  "paths": {
+    "/api/map": {
+      "get": {
+        "tags": ["Ships"],
+        "summary": "Карта поля боя",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Данные по карте",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scan": {
+      "get": {
+        "tags": ["Ships"],
+        "summary": "Сканирование вокруг своих кораблей",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Данные по карте, своим кораблям и вражеским кораблям",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/longScan": {
+      "post": {
+        "tags": ["Ships"],
+        "summary": "Сканирование удалённой точки на карте",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LongScan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ответ на применение дальнего сканирования",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LongScanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipCommand": {
+      "post": {
+        "tags": ["Ships"],
+        "summary": "Обработка команд контроля кораблей",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipsCommands"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ответ на ендпоинт управления флотом",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipCommandResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deathMatch/registration": {
+      "post": {
+        "tags": ["Registration"],
+        "summary": "Регистрация на death match",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ответ на запрос регистрации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deathMatch/exitBattle": {
+      "post": {
+        "tags": ["Registration"],
+        "summary": "Выход из death match боя",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ответ на запрос выхода из боя",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/royalBattle/registration": {
+      "post": {
+        "tags": ["Registration"],
+        "summary": "Регистрация на королевскую битву",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Токен для запроса",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ответ на запрос регистрации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MapResponse": {
+        "properties": {
+          "mapUrl": {
+            "type": "string"
+          },
+          "success": {
+            "description": "Показатель успешности запроса",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Массив ошибок",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "ScanResponse": {
+        "properties": {
+          "scan": {
+            "$ref": "#/components/schemas/Scan"
+          },
+          "success": {
+            "description": "Показатель успешности запроса",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Массив ошибок",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "LongScan": {
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 50
+          },
+          "y": {
+            "type": "integer",
+            "example": 90
+          }
+        },
+        "type": "object"
+      },
+      "LongScanResponse": {
+        "properties": {
+          "tick": {
+            "description": "Тик битвы",
+            "type": "integer"
+          },
+          "success": {
+            "description": "Показатель успешности запроса",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Массив ошибок",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "ShipsCommands": {
+        "properties": {
+          "ships": {
+            "description": "Команды для кораблей",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipCommand"
+            }
+          }
+        },
+        "type": "object"
+      },
+      "ShipCommandResponse": {
+        "properties": {
+          "tick": {
+            "description": "Тик битвы",
+            "type": "integer"
+          },
+          "success": {
+            "description": "Показатель успешности запроса",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Массив ошибок",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "RegistrationResponse": {
+        "properties": {
+          "success": {
+            "description": "Показатель успешности запроса",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Массив ошибок",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "CommonResponse": {
+        "properties": {
+          "success": {
+            "description": "Показатель успешности запроса",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Массив ошибок",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "message": {
+            "description": "Сообщение с описанием ошибки",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Scan": {
+        "properties": {
+          "myShips": {
+            "description": "Ваши корабли",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyShip"
+            }
+          },
+          "enemyShips": {
+            "description": "Вражеские корабли",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnemyShip"
+            }
+          },
+          "zone": {
+            "description": "Информация о зоне в королевской битве",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Zone"
+              }
+            ]
+          },
+          "tick": {
+            "description": "Тик битвы",
+            "type": "integer",
+            "example": 34
+          }
+        },
+        "type": "object"
+      },
+      "ShipCommand": {
+        "properties": {
+          "id": {
+            "description": "id корабля",
+            "type": "integer",
+            "example": 34
+          },
+          "changeSpeed": {
+            "description": "Изменение скорости корабля",
+            "type": "integer",
+            "example": 3,
+            "nullable": true
+          },
+          "rotate": {
+            "description": "Поворот корабля. Допустимые значения -90 и 90",
+            "type": "integer",
+            "example": -90,
+            "nullable": true
+          },
+          "cannonShoot": {
+            "description": "Координаты выстрела из пушки",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CannonShoot"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "MyShip": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 56
+          },
+          "x": {
+            "type": "integer",
+            "example": 20
+          },
+          "y": {
+            "type": "integer",
+            "example": 30
+          },
+          "size": {
+            "type": "integer",
+            "example": 3
+          },
+          "hp": {
+            "type": "integer",
+            "example": 4
+          },
+          "maxHp": {
+            "type": "integer",
+            "example": 5
+          },
+          "direction": {
+            "description": "Направление носа корабля",
+            "type": "string",
+            "example": {
+              "1": "north",
+              "2": "east",
+              "3": "south",
+              "4": "west"
+            }
+          },
+          "speed": {
+            "type": "integer",
+            "example": 5
+          },
+          "maxSpeed": {
+            "type": "integer",
+            "example": 15
+          },
+          "minSpeed": {
+            "type": "integer",
+            "example": -1
+          },
+          "maxChangeSpeed": {
+            "type": "integer",
+            "example": 7
+          },
+          "cannonCooldown": {
+            "type": "integer",
+            "example": 1
+          },
+          "cannonCooldownLeft": {
+            "type": "integer",
+            "example": 1
+          },
+          "cannonRadius": {
+            "type": "integer",
+            "example": 20
+          },
+          "scanRadius": {
+            "type": "integer",
+            "example": 25
+          },
+          "cannonShootSuccessCount": {
+            "description": "Количество успешных попаданий из пушки по другим кораблям",
+            "type": "integer",
+            "example": 3
+          }
+        },
+        "type": "object"
+      },
+      "EnemyShip": {
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 40
+          },
+          "y": {
+            "type": "integer",
+            "example": 45
+          },
+          "hp": {
+            "type": "integer",
+            "example": 4
+          },
+          "maxHp": {
+            "type": "integer",
+            "example": 4
+          },
+          "size": {
+            "type": "integer",
+            "example": 4
+          },
+          "direction": {
+            "description": "Направление носа корабля",
+            "type": "string",
+            "example": {
+              "1": "north",
+              "2": "east",
+              "3": "south",
+              "4": "west"
+            }
+          },
+          "speed": {
+            "type": "integer",
+            "example": 10
+          }
+        },
+        "type": "object"
+      },
+      "Zone": {
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 40
+          },
+          "y": {
+            "type": "integer",
+            "example": 45
+          },
+          "radius": {
+            "type": "integer",
+            "example": 20
+          }
+        },
+        "type": "object"
+      },
+      "CannonShoot": {
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 30
+          },
+          "y": {
+            "type": "integer",
+            "example": 34
+          }
+        },
+        "type": "object"
+      }
+    }
+  }
+}

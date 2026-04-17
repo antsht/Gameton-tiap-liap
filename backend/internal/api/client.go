@@ -27,11 +27,13 @@ func NewClient(baseURL, token string) *Client {
 
 func (c *Client) req(method, path string, body interface{}, out interface{}) error {
 	var reqBody io.Reader
+	var bodyBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("marshal err: %w", err)
 		}
+		bodyBytes = b
 		reqBody = bytes.NewReader(b)
 	}
 
@@ -39,6 +41,7 @@ func (c *Client) req(method, path string, body interface{}, out interface{}) err
 	if err != nil {
 		return fmt.Errorf("new request err: %w", err)
 	}
+	// Добавляем X-Auth-Token согласно правилам турнира API
 	req.Header.Set("X-Auth-Token", c.AuthToken)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -46,22 +49,23 @@ func (c *Client) req(method, path string, body interface{}, out interface{}) err
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("do err: %w", err)
+		return fmt.Errorf("do %s %s err: %w", method, path, err)
 	}
 	defer resp.Body.Close()
+	
+	respBodyBytes, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 400 {
 		var publicErr PublicError
-		// Try to decode game API error format
-		if err := json.NewDecoder(resp.Body).Decode(&publicErr); err == nil && len(publicErr.Errors) > 0 {
-			return fmt.Errorf("API error (code %d): %v", publicErr.Code, publicErr.Errors)
+		if err := json.Unmarshal(respBodyBytes, &publicErr); err == nil && len(publicErr.Errors) > 0 {
+			return fmt.Errorf("API error %s %s (code %d): %v", method, path, publicErr.Code, publicErr.Errors)
 		}
-		return fmt.Errorf("API returned status: %s", resp.Status)
+		return fmt.Errorf("API returned status: %s. Body: %s", resp.Status, string(respBodyBytes))
 	}
 
 	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			return fmt.Errorf("decode err: %w", err)
+		if err := json.Unmarshal(respBodyBytes, out); err != nil {
+			return fmt.Errorf("decode err on %s %s: %w", method, path, err)
 		}
 	}
 

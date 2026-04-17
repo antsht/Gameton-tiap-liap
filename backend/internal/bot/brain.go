@@ -21,7 +21,9 @@ func (b *Bot) loop() {
 
 		arena, err := b.client.GetArena()
 		if err != nil {
-			// Log sparingly if error persists
+			// If error, log it so we see it in dashboard
+			b.Log(fmt.Sprintf("API Arena Error: %v", err))
+			time.Sleep(1 * time.Second) // Don't spam too fast on error
 			continue
 		}
 

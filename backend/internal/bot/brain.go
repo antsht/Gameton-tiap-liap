@@ -33,10 +33,10 @@ func (b *Bot) loop() {
 			lastProcessedTurn = arena.TurnNo
 		}
 
-		// Умный тайминг до следующего запроса, чтобы не спамить API
-		waitMs := int(arena.NextTurnIn*1000) + 50
-		if waitMs < 200 {
-			waitMs = 200
+		// Умный тайминг до следующего запроса, чтобы не спамить API и не получать 429
+		waitMs := int(arena.NextTurnIn * 1000)
+		if waitMs < 600 { // Увеличили минимальную задержку!
+			waitMs = 600
 		}
 		time.Sleep(time.Duration(waitMs) * time.Millisecond)
 	}
@@ -120,10 +120,9 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 
-		// ЭВАКУАЦИЯ: relocateMain работает ТОЛЬКО со смежной (кардинально, расст=1) плантацией!
-		// Начинаем искать на 50% — через 10 ходов клетка на 100% и плантация исчезнет.
+		// ЭВАКУАЦИЯ на смежную (кардинально, расст=1) плантацию при прогрессе >= 50%
 		if !relocated && (progress >= 50 || mainHp <= 20) {
-			bestProg := progress // Ищем ЛЮБУЮ смежную с прогрессом МЕНЬШЕ нашего
+			bestProg := progress
 			var bestPos []int
 			for _, p := range arena.Plantations {
 				if p.IsMain || p.IsIsolated {
@@ -153,8 +152,7 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 
-		// ОБЯЗАТЕЛЬНО: если нет аварийного выхода — строим его!
-		// Проверяем есть ли хотя бы одна смежная плантация или стройка рядом с ЦУ
+		// Если нет пути отступления, строим его
 		hasAdjacentEscape := false
 		for _, p := range arena.Plantations {
 			if p.IsMain {
@@ -170,18 +168,16 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 			if dx+dy == 1 {
 				pProg := b.getCellProgress(arena, p.Position)
-				if pProg < progress { // Есть куда бежать
+				if pProg < progress {
 					hasAdjacentEscape = true
 					break
 				}
 			}
 		}
-		if !hasAdjacentEscape {
-			// Нет выхода! Экстренно начинаем стройку рядом с ЦУ
+		if !hasAdjacentEscape && progress > 40 { // Паникуем только если прогресс уже немаленький
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{mainPos[0] + offset[0], mainPos[1] + offset[1]}
 				if !b.isOccupied(arena, n) {
-					// Проверяем нет ли уже стройки тут
 					alreadyBuilding := false
 					for _, c := range arena.Construction {
 						if c.Position[0] == n[0] && c.Position[1] == n[1] {
@@ -191,7 +187,6 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 					}
 					if !alreadyBuilding {
 						b.Log(fmt.Sprintf("EMERGENCY BUILD escape route at %v for CU at %v (prog=%d%%)", n, mainPos, progress))
-						// Будет построено в computeHiveMind через обычный assign
 					}
 					break
 				}
@@ -212,7 +207,6 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		}
 	}
 
-	// Пишем лог с подробностями хода на диск
 	go b.dumpTurn(arena, cmd)
 }
 
@@ -285,8 +279,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		return assigned
 	}
 
-	// 1. Repair low-HP plantations (from earthquake/storm/beaver damage)
-	// Ремонт нужен: HP не восстанавливается автоматически. Сначала ЦУ, потом остальные.
+	// 1. Repair low-HP plantations
 	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 40 {
 		assign(mainPlantation.Position, 3)
 	}
@@ -303,7 +296,6 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	// 2.5 Focus attack enemies!
 	for _, enemy := range arena.Enemy {
-		// Send a massive attack on enemy plantations to destroy them and get huge points
 		assign(enemy.Position, 5)
 	}
 
@@ -323,13 +315,16 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		}
 		var cands []candidate
 
-		// Сначала ищем свободные клетки РЯДОМ С ЦУ (escape route — highest priority)
+		// Сначала ищем свободные клетки РЯДОМ С ЦУ (escape route) - только если есть угроза
 		if mainPlantation.Hp > 0 {
 			cuProg := b.getCellProgress(arena, mainPlantation.Position)
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) && !b.isUnderConstruction(arena, n) {
-					prio := 10000 + cuProg // Absolute priority
+					prio := 100
+					if cuProg >= 40 {
+						prio = 10000 + cuProg // Absolute priority only if in danger!
+					}
 					cands = append(cands, candidate{n, prio})
 				}
 			}

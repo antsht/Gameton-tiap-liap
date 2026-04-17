@@ -50,21 +50,13 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 
 	cmd := api.PlayerCommand{}
 
-	// Upgrade logic
-	points := arena.PlantationUpgrades.Points
-	if points > 0 {
-		upgradeChosen := false
-		for _, t := range arena.PlantationUpgrades.Tiers {
-			if t.Name == "settlement_limit" && t.Current < t.Max {
-				cmd.PlantationUpgrade = t.Name
-				upgradeChosen = true
-				break
-			}
+	// Upgrade logic — smart priority
+	if arena.PlantationUpgrades.Points > 0 {
+		upgrade := b.chooseBestUpgrade(arena)
+		if upgrade != "" {
+			cmd.PlantationUpgrade = upgrade
+			b.Log(fmt.Sprintf("Buying upgrade: %s", upgrade))
 		}
-		if !upgradeChosen {
-			cmd.PlantationUpgrade = "repair_power"
-		}
-		b.Log(fmt.Sprintf("Buying upgrade: %s", cmd.PlantationUpgrade))
 	}
 
 	// --- CU Evacuation ---
@@ -121,7 +113,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	idle := make(map[string]api.Plantation)
 	var mainPlantation api.Plantation
 	for _, p := range arena.Plantations {
-		idle[p.Id] = p
+		if !p.IsIsolated {
+			idle[p.Id] = p
+		}
 		if p.IsMain {
 			mainPlantation = p
 		}
@@ -147,13 +141,12 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		return dy
 	}
 
-	assign := func(target []int, needed int) {
+	assign := func(target []int, needed int) int {
 		assigned := 0
 		for id, p := range idle {
 			if assigned >= needed {
 				break
 			}
-			// Защита от самоповреждения/самолечения
 			if p.Position[0] == target[0] && p.Position[1] == target[1] {
 				continue
 			}
@@ -165,6 +158,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 				assigned++
 			}
 		}
+		return assigned
 	}
 
 	// 1. Defend CU
@@ -189,8 +183,11 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	if currentCount < limit && len(idle) > 0 {
 		candidates := make(map[string][]int)
 		for _, p := range arena.Plantations {
-			// Find adjacent empty cells
-			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}} {
+			if p.IsIsolated {
+				continue
+			}
+			// Find adjacent empty cells — ONLY cardinal directions!
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) {
 					key := fmt.Sprintf("%d,%d", n[0], n[1])
@@ -205,8 +202,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 				break
 			}
 			if n[0]%7 == 0 && n[1]%7 == 0 {
-				assign(n, 3)
-				currentCount++
+				if assign(n, 3) > 0 {
+					currentCount++
+				}
 				delete(candidates, key)
 			}
 		}
@@ -216,12 +214,36 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			if len(idle) == 0 || currentCount >= limit {
 				break
 			}
-			assign(n, 2)
-			currentCount++
+			if assign(n, 2) > 0 {
+				currentCount++
+			}
 		}
 	}
 
 	return actions
+}
+
+func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
+	priority := []string{
+		"settlement_limit",
+		"decay_mitigation",
+		"max_hp",
+		"signal_range",
+		"vision_range",
+		"repair_power",
+		"earthquake_mitigation",
+		"beaver_damage_mitigation",
+	}
+	tierMap := make(map[string]api.PlantationUpgradeTierItem)
+	for _, t := range arena.PlantationUpgrades.Tiers {
+		tierMap[t.Name] = t
+	}
+	for _, name := range priority {
+		if t, ok := tierMap[name]; ok && t.Current < t.Max {
+			return name
+		}
+	}
+	return ""
 }
 
 func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {

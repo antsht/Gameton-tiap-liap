@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pirates Bot Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="top-bar">
+        <h1>Pirates Bot ☠️</h1>
+        <div class="controls">
+            <select id="strategy-select">
+                <option value="expansion">Strategy: Expansion</option>
+                <option value="attack">Strategy: Attack</option>
+            </select>
+            <button id="btn-start" class="btn btn-green">Start Bot</button>
+            <button id="btn-stop" class="btn btn-red" disabled>Stop Bot</button>
+        </div>
+    </header>
+
+    <main class="grid-container">
+        <!-- Dashboard panel -->
+        <aside class="dashboard glass">
+            <h2>Dashboard</h2>
+            <div class="stat-group">
+                <div class="stat-box">
+                    <span class="label">Turn No</span>
+                    <span class="value" id="val-turn">-</span>
+                </div>
+                <div class="stat-box">
+                    <span class="label">Bot State</span>
+                    <span class="value" id="val-state">OFF</span>
+                </div>
+            </div>
+            
+            <div class="details">
+                <h3>Plantations</h3>
+                <p>Ours: <span id="val-my-plantations">0</span></p>
+                <p>Enemies: <span id="val-enemy-plantations">0</span></p>
+                <p>Beavers: <span id="val-beavers">0</span></p>
+                <p>Constructions: <span id="val-constructions">0</span></p>
+
+                <h3>Upgrades</h3>
+                <p>Points: <span id="val-upgrade-pts">0</span> (next in <span id="val-upgrade-ttl">0</span> turns)</p>
+                <div id="upgrade-tiers"></div>
+            </div>
+            
+            <div class="meteo" id="meteo-forecast">
+                <h3>Meteo Forecast</h3>
+                <ul id="meteo-list"></ul>
+            </div>
+        </aside>
+
+        <!-- Map Visualization -->
+        <section class="map-view glass">
+            <h2>Arena Map</h2>
+            <div class="canvas-container" id="canvas-container">
+               <canvas id="arena-canvas" width="800" height="800"></canvas>
+            </div>
+            <div class="legend" style="margin-top: 10px; font-size: 0.9em; color:#aaa;">
+               🟦 Ours | 🟥 Enemy | 🟨 Beavers | 🟩 Terraformed | 🟪 Construction | 👽 Sandstorm
+            </div>
+        </section>
+
+        <!-- Logs Box -->
+        <section class="logs-view glass">
+            <h2>Activity Logs</h2>
+            <div id="log-container" class="log-container">
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -67,6 +67,48 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		b.Log(fmt.Sprintf("Buying upgrade: %s", cmd.PlantationUpgrade))
 	}
 
+	// Спасение ЦУ (Релокация перед тем, как клетка исчезнет при 100% терраформировании)
+	var mainP *api.Plantation
+	for _, p := range arena.Plantations {
+		if p.IsMain {
+			mainP = &p
+			break
+		}
+	}
+
+	if mainP != nil {
+		progress := 0
+		for _, c := range arena.Cells {
+			if c.Position[0] == mainP.Position[0] && c.Position[1] == mainP.Position[1] {
+				progress = c.TerraformationProgress
+				break
+			}
+		}
+
+		// Если клетка скоро взорвется (100%) ИЛИ ЦУ почти убит бобрами
+		if progress >= 80 || mainP.Hp <= 20 {
+			// Ищем безопасную плантацию для побега
+			for _, p := range arena.Plantations {
+				if !p.IsMain && p.Hp >= 30 {
+					pProg := 0
+					for _, c := range arena.Cells {
+						if c.Position[0] == p.Position[0] && c.Position[1] == p.Position[1] {
+							pProg = c.TerraformationProgress
+							break
+						}
+					}
+					if pProg < 50 {
+						cmd.RelocateMain = p.Position
+						b.Log(fmt.Sprintf("EVACUATE! Relocating CU to %v. Prog: %d, HP: %d", p.Position, progress, mainP.Hp))
+						// Плантация, куда мы едем, будет временно занята, но команды HiveMind всё еще могут идти с неё, 
+						// сервер должен это прожевать. 
+						break
+					}
+				}
+			}
+		}
+	}
+
 	cmd.Command = b.computeHiveMind(arena)
 
 	if len(cmd.Command) > 0 || cmd.PlantationUpgrade != "" || len(cmd.RelocateMain) > 0 {

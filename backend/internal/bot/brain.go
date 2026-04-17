@@ -73,9 +73,52 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 	if mainPos != nil {
 		progress := b.getCellProgress(arena, mainPos)
 
+		// Check for incoming earthquakes
+		eqTurns := -1
+		for _, m := range arena.MeteoForecasts {
+			if m.Kind == "earthquake" {
+				eqTurns = m.TurnsUntil
+				break
+			}
+		}
+
+		var mainPlantation *api.Plantation
+		for i, p := range arena.Plantations {
+			if p.IsMain {
+				mainPlantation = &arena.Plantations[i]
+				break
+			}
+		}
+
+		eqImminent := eqTurns >= 0 && eqTurns <= 2
+		cuNeedsEqEscape := mainPlantation != nil && eqImminent && (mainPlantation.ImmunityUntilTurn <= arena.TurnNo+eqTurns)
+
+		relocated := false
+		if cuNeedsEqEscape {
+			b.Log(fmt.Sprintf("EMERGENCY! Earthquake in %d turns. CU lacks immunity! Finding safe harbor...", eqTurns))
+			for _, p := range arena.Plantations {
+				if p.IsMain || p.IsIsolated {
+					continue
+				}
+				dx := p.Position[0] - mainPos[0]
+				dy := p.Position[1] - mainPos[1]
+				if dx < 0 { dx = -dx }
+				if dy < 0 { dy = -dy }
+				if dx+dy != 1 {
+					continue
+				}
+				if p.Hp >= 15 && p.ImmunityUntilTurn > arena.TurnNo+eqTurns {
+					cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {p.Position[0], p.Position[1]}}
+					b.Log(fmt.Sprintf("EVACUATE (EQ AVOID!) CU %v→%v (Immune until %d)", mainPos, p.Position, p.ImmunityUntilTurn))
+					relocated = true
+					break
+				}
+			}
+		}
+
 		// ЭВАКУАЦИЯ: relocateMain работает ТОЛЬКО со смежной (кардинально, расст=1) плантацией!
 		// Начинаем искать на 50% — через 10 ходов клетка на 100% и плантация исчезнет.
-		if progress >= 50 || mainHp <= 20 {
+		if !relocated && (progress >= 50 || mainHp <= 20) {
 			bestProg := progress // Ищем ЛЮБУЮ смежную с прогрессом МЕНЬШЕ нашего
 			var bestPos []int
 			for _, p := range arena.Plantations {
@@ -187,10 +230,25 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		if dy < 0 {
 			dy = -dy
 		}
-		if dx > dy {
-			return dx
+		return dx + dy
+	}
+
+	buildManhattanPath := func(start, dest []int) [][]int {
+		path := [][]int{start}
+		curr := []int{start[0], start[1]}
+		for curr[0] != dest[0] || curr[1] != dest[1] {
+			if curr[0] < dest[0] {
+				curr[0]++
+			} else if curr[0] > dest[0] {
+				curr[0]--
+			} else if curr[1] < dest[1] {
+				curr[1]++
+			} else if curr[1] > dest[1] {
+				curr[1]--
+			}
+			path = append(path, []int{curr[0], curr[1]})
 		}
-		return dy
+		return path
 	}
 
 	assign := func(target []int, needed int) int {
@@ -204,7 +262,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			}
 			if distance(p.Position, target) <= actionRange {
 				actions = append(actions, api.PlantationAction{
-					Path: [][]int{p.Position, p.Position, target},
+					Path: buildManhattanPath(p.Position, target),
 				})
 				delete(idle, id)
 				assigned++

@@ -74,7 +74,7 @@ type Plantation struct {
 type PlayerCommand struct {
 	Command           []PlantationAction  `json:"command,omitempty"`
 	PlantationUpgrade string              `json:"plantationUpgrade,omitempty"`
-	RelocateMain      []int               `json:"relocateMain,omitempty"`
+	RelocateMain      [][]int             `json:"relocateMain,omitempty"`
 }
 
 type PlantationAction struct {

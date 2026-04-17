@@ -34,7 +34,7 @@ func (b *Bot) loop() {
 		}
 
 		// Умный тайминг до следующего запроса, чтобы не спамить API
-		waitMs := int(arena.NextTurnIn * 1000) + 50
+		waitMs := int(arena.NextTurnIn*1000) + 50
 		if waitMs < 200 {
 			waitMs = 200
 		}
@@ -67,43 +67,32 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		b.Log(fmt.Sprintf("Buying upgrade: %s", cmd.PlantationUpgrade))
 	}
 
-	// Спасение ЦУ (Релокация перед тем, как клетка исчезнет при 100% терраформировании)
-	var mainP *api.Plantation
+	// --- CU Evacuation ---
+	var mainPos []int
+	var mainHp int
 	for _, p := range arena.Plantations {
 		if p.IsMain {
-			mainP = &p
+			mainPos = []int{p.Position[0], p.Position[1]}
+			mainHp = p.Hp
 			break
 		}
 	}
 
-	if mainP != nil {
-		progress := 0
-		for _, c := range arena.Cells {
-			if c.Position[0] == mainP.Position[0] && c.Position[1] == mainP.Position[1] {
-				progress = c.TerraformationProgress
-				break
-			}
-		}
+	if mainPos != nil {
+		progress := b.getCellProgress(arena, mainPos)
 
-		// Если клетка скоро взорвется (100%) ИЛИ ЦУ почти убит бобрами
-		if progress >= 80 || mainP.Hp <= 20 {
-			// Ищем безопасную плантацию для побега
+		if progress >= 75 || mainHp <= 15 {
 			for _, p := range arena.Plantations {
-				if !p.IsMain && p.Hp >= 30 {
-					pProg := 0
-					for _, c := range arena.Cells {
-						if c.Position[0] == p.Position[0] && c.Position[1] == p.Position[1] {
-							pProg = c.TerraformationProgress
-							break
-						}
-					}
-					if pProg < 50 {
-						cmd.RelocateMain = p.Position
-						b.Log(fmt.Sprintf("EVACUATE! Relocating CU to %v. Prog: %d, HP: %d", p.Position, progress, mainP.Hp))
-						// Плантация, куда мы едем, будет временно занята, но команды HiveMind всё еще могут идти с неё, 
-						// сервер должен это прожевать. 
-						break
-					}
+				if p.IsMain || p.IsIsolated {
+					continue
+				}
+				pProg := b.getCellProgress(arena, p.Position)
+				if pProg < 40 && p.Hp >= 30 {
+					from := []int{mainPos[0], mainPos[1]}
+					to := []int{p.Position[0], p.Position[1]}
+					cmd.RelocateMain = [][]int{from, to}
+					b.Log(fmt.Sprintf("EVACUATE CU from %v to %v (prog=%d%%, hp=%d)", from, to, progress, mainHp))
+					break
 				}
 			}
 		}
@@ -121,7 +110,7 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 	}
-	
+
 	// Пишем лог с подробностями хода на диск
 	go b.dumpTurn(arena, cmd)
 }
@@ -145,10 +134,16 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	distance := func(p1, p2 []int) int {
 		dx := p1[0] - p2[0]
-		if dx < 0 { dx = -dx }
+		if dx < 0 {
+			dx = -dx
+		}
 		dy := p1[1] - p2[1]
-		if dy < 0 { dy = -dy }
-		if dx > dy { return dx }
+		if dy < 0 {
+			dy = -dy
+		}
+		if dx > dy {
+			return dx
+		}
 		return dy
 	}
 
@@ -195,7 +190,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		candidates := make(map[string][]int)
 		for _, p := range arena.Plantations {
 			// Find adjacent empty cells
-			for _, offset := range [][]int{{-1,0},{1,0},{0,-1},{0,1},{-1,-1},{1,-1},{-1,1},{1,1}} {
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}} {
 				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) {
 					key := fmt.Sprintf("%d,%d", n[0], n[1])
@@ -206,9 +201,11 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 		// Prioritize golden cells
 		for key, n := range candidates {
-			if len(idle) == 0 || currentCount >= limit { break }
+			if len(idle) == 0 || currentCount >= limit {
+				break
+			}
 			if n[0]%7 == 0 && n[1]%7 == 0 {
-				assign(n, 3) 
+				assign(n, 3)
 				currentCount++
 				delete(candidates, key)
 			}
@@ -216,7 +213,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 		// Fill normal cells
 		for _, n := range candidates {
-			if len(idle) == 0 || currentCount >= limit { break }
+			if len(idle) == 0 || currentCount >= limit {
+				break
+			}
 			assign(n, 2)
 			currentCount++
 		}
@@ -232,6 +231,15 @@ func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {
 		}
 	}
 	return 30
+}
+
+func (b *Bot) getCellProgress(arena *api.PlayerResponse, pos []int) int {
+	for _, c := range arena.Cells {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return c.TerraformationProgress
+		}
+	}
+	return 0
 }
 
 func (b *Bot) isOccupied(arena *api.PlayerResponse, pos []int) bool {

@@ -393,6 +393,17 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		}
 	}
 
+	// Изолированные не дают команд — спасти их можно только мостом/ремонтом сети.
+	var isolatedPlants []api.Plantation
+	var connectedPlants []api.Plantation
+	for _, p := range arena.Plantations {
+		if p.IsIsolated {
+			isolatedPlants = append(isolatedPlants, p)
+		} else {
+			connectedPlants = append(connectedPlants, p)
+		}
+	}
+
 	actionRange := arena.ActionRange
 	if actionRange <= 0 {
 		actionRange = 1
@@ -404,7 +415,8 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	plantCount := len(arena.Plantations)
 	isEarlyGame := plantCount < 5
-	isAggressive := plantCount < 10
+	// При изоляции colony repair нужен — иначе сеть рвётся как в T89–T93 (логи).
+	isAggressive := plantCount < 10 && len(isolatedPlants) == 0
 
 	if isAggressive {
 		b.Log(fmt.Sprintf("Aggressive Mode (%d plantations). Repairs disabled for colonies.", plantCount))
@@ -595,14 +607,10 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	// RECONNECT — если есть isolated плантации, построить мост обратно.
 	// Приоритет ВЫШЕ expansion, НИЖЕ CU repair.
 	// ============================================================
-	var isolatedPlants []api.Plantation
-	var connectedPlants []api.Plantation
-	for _, p := range arena.Plantations {
-		if p.IsIsolated {
-			isolatedPlants = append(isolatedPlants, p)
-		} else {
-			connectedPlants = append(connectedPlants, p)
-		}
+	reconnectBase := 12000.0
+	if len(isolatedPlants) > 0 {
+		// Выше «Finish Construction» (15000) и типичного expansion — иначе greedy жрёт одну клетку.
+		reconnectBase = 85000.0
 	}
 
 	if len(isolatedPlants) > 0 && len(connectedPlants) > 0 {
@@ -638,8 +646,8 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 						boosted := false
 						for i := range targets {
 							if targets[i].pos[0] == n[0] && targets[i].pos[1] == n[1] {
-								if targets[i].baseVal < 9000 {
-									targets[i].baseVal = 9000
+								if targets[i].baseVal < reconnectBase {
+									targets[i].baseVal = reconnectBase
 								}
 								targets[i].name = "Reconnect"
 								boosted = true
@@ -648,7 +656,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 						if !boosted && !b.isOccupied(arena, n) {
 							targets = append(targets, target{
 								name: "Reconnect", pos: n,
-								baseVal: 12000, maxUsage: 50, flat: true,
+								baseVal: reconnectBase, maxUsage: 50, flat: true,
 							})
 						}
 						b.Log(fmt.Sprintf("RECONNECT target: %v (bridges %v to %v)", n, cp.Position, ip.Position))

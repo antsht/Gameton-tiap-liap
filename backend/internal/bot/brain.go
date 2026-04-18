@@ -450,6 +450,182 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		}
 	}
 
+	// ============================================================
+	// BRIDGE REPAIR — ремонт плантаций, чья смерть изолирует других.
+	// Работает ВСЕГДА, даже в aggressive mode.
+	// ============================================================
+	for _, p := range arena.Plantations {
+		if p.IsMain || p.IsIsolated || p.Hp > 25 {
+			continue
+		}
+		neighborCount := 0
+		for _, other := range arena.Plantations {
+			if other.Id == p.Id || other.IsIsolated {
+				continue
+			}
+			if manhattanDistance(p.Position, other.Position) == 1 {
+				neighborCount++
+			}
+		}
+		if neighborCount >= 2 {
+			targets = append(targets, target{
+				name: "Repair Bridge", pos: p.Position,
+				baseVal: 5000, maxUsage: 3,
+			})
+			b.Log(fmt.Sprintf("BRIDGE REPAIR: %v hp=%d (connects %d neighbors)", p.Position, p.Hp, neighborCount))
+		}
+	}
+
+	// ============================================================
+	// PREEMPTIVE BRIDGE — если мост скоро деградирует, построить обходной
+	// путь ЗАРАНЕЕ, пока мост ещё жив.
+	// ============================================================
+	for _, p := range arena.Plantations {
+		if p.IsIsolated {
+			continue
+		}
+		degTurns := b.getCellDegradeTurns(arena, p.Position)
+		if degTurns < 0 || degTurns > 15 {
+			continue
+		}
+
+		// Считаем соседей-плантации
+		var neighborPos [][]int
+		for _, other := range arena.Plantations {
+			if other.Id == p.Id || other.IsIsolated {
+				continue
+			}
+			if manhattanDistance(p.Position, other.Position) == 1 {
+				neighborPos = append(neighborPos, other.Position)
+			}
+		}
+		if len(neighborPos) < 2 {
+			continue // не мост — деградация не опасна
+		}
+
+		b.Log(fmt.Sprintf("DEGRADATION WARNING: bridge %v degrades in %d turns (connects %d)",
+			p.Position, degTurns, len(neighborPos)))
+
+		// Ищем лучшую позицию для обходного моста:
+		// Цель: позиция, смежная с максимумом соседей dying_bridge
+		var bestBypass []int
+		bestConnects := 0
+		for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+			n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
+			if b.isOccupied(arena, n) || !isSafe(n) {
+				continue
+			}
+			// skip if n is the same position as the bridge itself
+			connects := 0
+			for _, np := range neighborPos {
+				if manhattanDistance(n, np) <= 1 {
+					connects++
+				}
+			}
+			if connects > bestConnects {
+				bestConnects = connects
+				bestBypass = n
+			}
+		}
+
+		if bestBypass != nil && bestConnects >= 1 {
+			val := 7000.0
+			if degTurns <= 8 {
+				val = 8500.0
+			}
+			// Boost existing target if already present
+			boosted := false
+			for i := range targets {
+				if targets[i].pos[0] == bestBypass[0] && targets[i].pos[1] == bestBypass[1] {
+					if targets[i].baseVal < val {
+						targets[i].baseVal = val
+					}
+					targets[i].name = "Preemptive Bridge"
+					boosted = true
+				}
+			}
+			if !boosted {
+				targets = append(targets, target{
+					name:     "Preemptive Bridge",
+					pos:      bestBypass,
+					baseVal:  val,
+					maxUsage: 50,
+					flat:     true,
+				})
+			}
+			b.Log(fmt.Sprintf("PREEMPTIVE BRIDGE: build %v to bypass dying %v (degrades in %d, connects %d)",
+				bestBypass, p.Position, degTurns, bestConnects))
+		}
+	}
+
+	// ============================================================
+	// RECONNECT — если есть isolated плантации, построить мост обратно.
+	// Приоритет ВЫШЕ expansion, НИЖЕ CU repair.
+	// ============================================================
+	var isolatedPlants []api.Plantation
+	var connectedPlants []api.Plantation
+	for _, p := range arena.Plantations {
+		if p.IsIsolated {
+			isolatedPlants = append(isolatedPlants, p)
+		} else {
+			connectedPlants = append(connectedPlants, p)
+		}
+	}
+
+	if len(isolatedPlants) > 0 && len(connectedPlants) > 0 {
+		b.Log(fmt.Sprintf("WARNING: %d isolated plantations! Reconnect priority!", len(isolatedPlants)))
+
+		reconnectSeen := map[[2]int]bool{}
+		// Ищем позиции, смежные с connected, которые также смежны с isolated
+		for _, cp := range connectedPlants {
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+				n := []int{cp.Position[0] + offset[0], cp.Position[1] + offset[1]}
+				key := [2]int{n[0], n[1]}
+				if reconnectSeen[key] {
+					continue
+				}
+				reconnectSeen[key] = true
+
+				// Уже занята плантацией? Тогда не нужно строить
+				isPlant := false
+				for _, pp := range arena.Plantations {
+					if pp.Position[0] == n[0] && pp.Position[1] == n[1] {
+						isPlant = true
+						break
+					}
+				}
+				if isPlant {
+					continue
+				}
+
+				// Эта позиция смежна с isolated?
+				for _, ip := range isolatedPlants {
+					if manhattanDistance(n, ip.Position) <= 1 {
+						// Нашли мост! Проверяем, есть ли уже такой target (construction)
+						boosted := false
+						for i := range targets {
+							if targets[i].pos[0] == n[0] && targets[i].pos[1] == n[1] {
+								if targets[i].baseVal < 9000 {
+									targets[i].baseVal = 9000
+								}
+								targets[i].name = "Reconnect"
+								boosted = true
+							}
+						}
+						if !boosted && !b.isOccupied(arena, n) {
+							targets = append(targets, target{
+								name: "Reconnect", pos: n,
+								baseVal: 9000, maxUsage: 50, flat: true,
+							})
+						}
+						b.Log(fmt.Sprintf("RECONNECT target: %v (bridges %v to %v)", n, cp.Position, ip.Position))
+						break
+					}
+				}
+			}
+		}
+	}
+
 	// Escape route для ЦУ
 	if mainPlantation.Hp > 0 {
 		hasSafe := false
@@ -794,6 +970,15 @@ func (b *Bot) getCellProgress(arena *api.PlayerResponse, pos []int) int {
 		}
 	}
 	return 0
+}
+
+func (b *Bot) getCellDegradeTurns(arena *api.PlayerResponse, pos []int) int {
+	for _, c := range arena.Cells {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return c.TurnsUntilDegradation
+		}
+	}
+	return -1
 }
 
 func (b *Bot) isUnderConstruction(arena *api.PlayerResponse, pos []int) bool {

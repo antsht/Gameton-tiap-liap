@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"math"
 	"piratesbot/internal/api"
 	"time"
 )
@@ -71,7 +72,6 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		mainPos := []int{mainPlantation.Position[0], mainPlantation.Position[1]}
 		progress := b.getCellProgress(arena, mainPos)
 
-		// Check for incoming earthquakes
 		eqTurns := -1
 		for _, m := range arena.MeteoForecasts {
 			if m.Kind == "earthquake" {
@@ -100,7 +100,8 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 
-		if !relocated && (progress >= 85 || mainPlantation.Hp <= 20) {
+		// FIX #2: порог был 20, теперь 15 — только критический HP
+		if !relocated && (progress >= 85 || mainPlantation.Hp <= 15) {
 			bestProg := progress
 			var bestPos []int
 			for _, p := range arena.Plantations {
@@ -137,22 +138,21 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 	go b.dumpTurn(arena, cmd)
 }
 
-// target — цель для распределения команд.
+// ========================================================================
+// Types
+// ========================================================================
+
 type target struct {
 	name     string
 	pos      []int
-	baseVal  float64 // базовая ценность цели
-	usage    int     // сколько команд уже назначено
-	maxUsage int     // максимум полезных команд
-	flat     bool    // если true — нет diminishing returns (стройка: каждая команда = +1 CS)
+	baseVal  float64
+	usage    int
+	maxUsage int
+	flat     bool // если true — нет diminishing returns (стройка)
 }
 
-// marginalGain — убывающая отдача от каждой следующей команды на эту цель.
-// Для flat-целей (стройка) — без уменьшения (каждая команда = +1 CS, все одинаково полезны).
-// Для остальных — gain = baseVal * max(0, 5 - usage - chainPenalty).
 func (t *target) marginalGain(chainPenalty int) float64 {
 	if t.flat {
-		// Стройка: каждая команда одинаково ценна, только chain penalty
 		eff := 5 - chainPenalty
 		if eff <= 0 {
 			return 0
@@ -166,13 +166,189 @@ func (t *target) marginalGain(chainPenalty int) float64 {
 	return t.baseVal * float64(eff)
 }
 
-func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction {
-	var actions []api.PlantationAction
+type worker struct {
+	p           api.Plantation
+	usedActions int
+}
 
-	type worker struct {
-		p           api.Plantation
-		usedActions int
+// ========================================================================
+// Beam Search Simulation
+// ========================================================================
+
+type simState struct {
+	plants        [][2]int
+	constructions map[[2]int]int // pos -> progress (0..50)
+	score         float64
+}
+
+func newSimState(arena *api.PlayerResponse) *simState {
+	s := &simState{constructions: make(map[[2]int]int)}
+	for _, p := range arena.Plantations {
+		if !p.IsIsolated {
+			s.plants = append(s.plants, [2]int{p.Position[0], p.Position[1]})
+		}
 	}
+	for _, c := range arena.Construction {
+		s.constructions[[2]int{c.Position[0], c.Position[1]}] = c.Progress
+	}
+	return s
+}
+
+func (s *simState) clone() *simState {
+	ns := &simState{
+		plants:        make([][2]int, len(s.plants)),
+		constructions: make(map[[2]int]int),
+		score:         s.score,
+	}
+	copy(ns.plants, s.plants)
+	for k, v := range s.constructions {
+		ns.constructions[k] = v
+	}
+	return ns
+}
+
+// advance — один ход вперёд: терраформация + применение build команд + завершение строек.
+func (s *simState) advance(buildCmds map[[2]int]int) float64 {
+	turnScore := 0.0
+
+	// 1. Терраформация: каждая плантация приносит очки
+	for _, p := range s.plants {
+		val := 10.0
+		if p[0]%7 == 0 && p[1]%7 == 0 {
+			val = 15.0
+		}
+		turnScore += val * 5 // TS = 5
+	}
+
+	// 2. Применяем build-команды
+	for pos, count := range buildCmds {
+		s.constructions[pos] += count
+	}
+
+	// 3. Завершённые стройки → новые плантации
+	for pos, prog := range s.constructions {
+		if prog >= 50 {
+			s.plants = append(s.plants, pos)
+			delete(s.constructions, pos)
+		}
+	}
+
+	s.score += turnScore
+	return turnScore
+}
+
+// ========================================================================
+// Clone helpers for beam search
+// ========================================================================
+
+func cloneTargets(targets []target) []target {
+	cloned := make([]target, len(targets))
+	for i, t := range targets {
+		cloned[i] = t
+		cloned[i].pos = append([]int{}, t.pos...)
+		cloned[i].usage = 0
+	}
+	return cloned
+}
+
+func cloneWorkers(workers map[string]*worker) map[string]*worker {
+	cloned := make(map[string]*worker, len(workers))
+	for k, v := range workers {
+		w := *v
+		w.usedActions = 0
+		cloned[k] = &w
+	}
+	return cloned
+}
+
+// extractBuildCmds — из списка PlantationAction вытаскивает, сколько build-команд идёт на каждую позицию.
+func extractBuildCmds(actions []api.PlantationAction, arena *api.PlayerResponse) map[[2]int]int {
+	plantSet := make(map[[2]int]bool)
+	for _, p := range arena.Plantations {
+		plantSet[[2]int{p.Position[0], p.Position[1]}] = true
+	}
+	cmds := make(map[[2]int]int)
+	for _, a := range actions {
+		if len(a.Path) < 2 {
+			continue
+		}
+		tgt := [2]int{a.Path[1][0], a.Path[1][1]}
+		if !plantSet[tgt] {
+			cmds[tgt]++ // это build-команда (не repair/sabotage на свою плантацию)
+		}
+	}
+	return cmds
+}
+
+// ========================================================================
+// Greedy Allocation
+// ========================================================================
+
+func greedyAllocate(
+	workers map[string]*worker,
+	targets []target,
+	actionRange int,
+	maxActions int,
+) []api.PlantationAction {
+	var actions []api.PlantationAction
+	currentActions := 0
+
+	for currentActions < maxActions {
+		bestScore := -1.0
+		var bestWorker *worker
+		var bestTarget *target
+
+		for _, w := range workers {
+			if w.usedActions >= 5 {
+				continue
+			}
+			for i := range targets {
+				t := &targets[i]
+				if t.usage >= t.maxUsage {
+					continue
+				}
+				if t.name != "Repair CU" && t.name != "Repair Colony" {
+					if w.p.Position[0] == t.pos[0] && w.p.Position[1] == t.pos[1] {
+						continue
+					}
+				}
+				dist := manhattanDistance(w.p.Position, t.pos)
+				if dist > actionRange {
+					continue
+				}
+				chainPenalty := dist
+				score := t.marginalGain(chainPenalty)
+				if score > bestScore {
+					bestScore = score
+					bestWorker = w
+					bestTarget = t
+				}
+			}
+		}
+
+		if bestWorker == nil || bestTarget == nil || bestScore <= 0 {
+			break
+		}
+
+		actions = append(actions, api.PlantationAction{
+			Path: [][]int{
+				{bestWorker.p.Position[0], bestWorker.p.Position[1]},
+				{bestTarget.pos[0], bestTarget.pos[1]},
+			},
+		})
+		bestWorker.usedActions++
+		bestTarget.usage++
+		currentActions++
+	}
+
+	return actions
+}
+
+// ========================================================================
+// computeHiveMind — main decision engine
+// ========================================================================
+
+func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction {
 	workers := make(map[string]*worker)
 	var mainPlantation api.Plantation
 	for _, p := range arena.Plantations {
@@ -218,89 +394,63 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	// --- СТРОИМ СПИСОК ЦЕЛЕЙ ---
 	var targets []target
 
-	// ============================================================
-	// ПРИОРИТЕТ МЕГА: Ремонт ЦУ
-	// ============================================================
-	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 45 {
+	// FIX #2: порог Repair CU снижен с 45 до 30. При hp>30 — не тратим команды на repair.
+	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 30 {
 		targets = append(targets, target{
-			name:     "Repair CU",
-			pos:      mainPlantation.Position,
-			baseVal:  10000,
-			maxUsage: 5,
+			name: "Repair CU", pos: mainPlantation.Position,
+			baseVal: 10000, maxUsage: 5,
 		})
 	}
 
-	// ============================================================
-	// ПРИОРИТЕТ: Достройка текущих стройплощадок
-	// flat=true — каждая команда одинаково ценна (+1 CS)
-	// Если ранняя фаза — baseVal ОГРОМНЫЙ, чтобы не распылять
-	// ============================================================
+	// Достройка текущих стройплощадок (flat=true)
 	for _, constr := range arena.Construction {
 		val := 3000.0
-		maxU := 50 // без лимита usage
+		maxU := 50
 		if isEarlyGame {
-			val = 8000.0 // ранняя фаза: стройка — абсолютный приоритет
+			val = 8000.0
 		}
 		if constr.Progress >= 40 {
-			val *= 1.5 // полупостроенное — ещё важнее дофинишить
+			val *= 1.5
 		}
 		if constr.Progress >= 90 {
-			val = 15000.0 // ultra-finish
+			val = 15000.0
 		}
 		targets = append(targets, target{
-			name:     "Finish Construction",
-			pos:      constr.Position,
-			baseVal:  val,
-			maxUsage: maxU,
-			flat:     true, // КЛЮЧЕВОЕ: каждая команда ценна одинаково
+			name: "Finish Construction", pos: constr.Position,
+			baseVal: val, maxUsage: maxU, flat: true,
 		})
 	}
 
-	// ============================================================
-	// ПРИОРИТЕТ: Охота на бобров (x10 от клетки — огромный буст)
-	// ============================================================
+	// Охота на бобров
 	for _, bvr := range arena.Beavers {
 		targets = append(targets, target{
-			name:     "Hunt Beaver",
-			pos:      bvr.Position,
-			baseVal:  2000,
-			maxUsage: 4,
+			name: "Hunt Beaver", pos: bvr.Position,
+			baseVal: 2000, maxUsage: 4,
 		})
 	}
 
-	// ============================================================
-	// ПРИОРИТЕТ: Диверсия врагов
-	// Kill-finish: если HP <= damage → максимальный приоритет
-	// ============================================================
+	// Диверсия врагов
 	for _, enemy := range arena.Enemy {
 		val := b.sabotageScore(enemy)
 		targets = append(targets, target{
-			name:     "Sabotage Enemy",
-			pos:      enemy.Position,
-			baseVal:  val,
-			maxUsage: 4,
+			name: "Sabotage Enemy", pos: enemy.Position,
+			baseVal: val, maxUsage: 4,
 		})
 	}
 
-	// ============================================================
-	// ПРИОРИТЕТ: Ремонт обычных плантаций (только не в агрессивном режиме)
-	// ============================================================
+	// Ремонт обычных плантаций
 	if !isAggressive {
 		for _, p := range arena.Plantations {
 			if !p.IsMain && !p.IsIsolated && p.Hp > 0 && p.Hp <= 25 {
 				targets = append(targets, target{
-					name:     "Repair Colony",
-					pos:      p.Position,
-					baseVal:  600,
-					maxUsage: 2,
+					name: "Repair Colony", pos: p.Position,
+					baseVal: 600, maxUsage: 2,
 				})
 			}
 		}
 	}
 
-	// ============================================================
 	// Escape route для ЦУ
-	// ============================================================
 	if mainPlantation.Hp > 0 {
 		hasSafe := false
 		cuProg := b.getCellProgress(arena, mainPlantation.Position)
@@ -322,11 +472,8 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) && isSafe(n) {
 					targets = append(targets, target{
-						name:     "Expansion (Escape)",
-						pos:      n,
-						baseVal:  2500,
-						maxUsage: 50,
-						flat:     true, // это стройка, каждая команда = +1 CS
+						name: "Expansion (Escape)", pos: n,
+						baseVal: 2500, maxUsage: 50, flat: true,
 					})
 					break
 				}
@@ -334,15 +481,10 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		}
 	}
 
-	// ============================================================
-	// ЭКСПАНСИЯ — только если НЕТ активной стройки ИЛИ у нас достаточно воркеров
-	// В ранней фазе: МАКСИМУМ 1 новая стройка (не распылять!)
-	// ============================================================
+	// Экспансия
 	hasActiveConstruction := len(arena.Construction) > 0
 	canStartNewBuild := true
-
 	if isEarlyGame && hasActiveConstruction {
-		// В ранней фазе: не начинай новую стройку пока текущая не закончена
 		canStartNewBuild = false
 	}
 
@@ -366,93 +508,171 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 				val := b.buildScore(arena, n, mainPlantation.Position, overbuiltRatio)
 
 				if isEarlyGame {
-					// В ранней фазе: выбираем ЛУЧШУЮ одну клетку и спамим её
 					if val > bestExpVal {
 						bestExpVal = val
 						bestExpPos = n
 					}
 				} else {
 					targets = append(targets, target{
-						name:     "Expansion",
-						pos:      n,
-						baseVal:  val,
-						maxUsage: 50,
-						flat:     true,
+						name: "Expansion", pos: n,
+						baseVal: val, maxUsage: 50, flat: true,
 					})
 				}
 			}
 		}
 
-		// В ранней фазе — добавляем только лучшую клетку
 		if isEarlyGame && bestExpPos != nil {
 			targets = append(targets, target{
-				name:     "Expansion",
-				pos:      bestExpPos,
-				baseVal:  bestExpVal,
-				maxUsage: 50,
-				flat:     true,
+				name: "Expansion", pos: bestExpPos,
+				baseVal: bestExpVal, maxUsage: 50, flat: true,
 			})
 		}
 	}
 
-	// --- MARGINAL GAIN DISTRIBUTION ---
 	maxActions := 50
-	currentActions := 0
 
-	for currentActions < maxActions {
-		bestScore := -1.0
-		var bestWorker *worker
-		var bestTarget *target
-
-		for _, w := range workers {
-			if w.usedActions >= 5 {
-				continue
-			}
-			for i := range targets {
-				t := &targets[i]
-				if t.usage >= t.maxUsage {
-					continue
-				}
-				// self-repair allowed, self-action on other tasks — skip
-				if t.name != "Repair CU" && t.name != "Repair Colony" {
-					if w.p.Position[0] == t.pos[0] && w.p.Position[1] == t.pos[1] {
-						continue
-					}
-				}
-				dist := manhattanDistance(w.p.Position, t.pos)
-				if dist > actionRange {
-					continue
-				}
-				chainPenalty := dist
-				score := t.marginalGain(chainPenalty)
-				if score > bestScore {
-					bestScore = score
-					bestWorker = w
-					bestTarget = t
-				}
-			}
-		}
-
-		if bestWorker == nil || bestTarget == nil || bestScore <= 0 {
-			break
-		}
-
-		actions = append(actions, api.PlantationAction{
-			Path: [][]int{
-				{bestWorker.p.Position[0], bestWorker.p.Position[1]},
-				{bestTarget.pos[0], bestTarget.pos[1]},
-			},
-		})
-		bestWorker.usedActions++
-		bestTarget.usage++
-		currentActions++
+	// ================================================================
+	// FIX #3: BEAM SEARCH — multi-turn lookahead (2 хода)
+	// Генерируем несколько вариантов распределения команд,
+	// симулируем каждый на 2 хода вперёд, выбираем лучший.
+	// ================================================================
+	if len(targets) <= 1 || len(workers) == 0 {
+		// Тривиальный случай — beam search не нужен
+		return greedyAllocate(workers, targets, actionRange, maxActions)
 	}
 
-	return actions
+	type beamCandidate struct {
+		actions []api.PlantationAction
+		label   string
+	}
+	var candidates []beamCandidate
+
+	// Candidate 0: baseline (оригинальные веса)
+	candidates = append(candidates, beamCandidate{
+		actions: greedyAllocate(cloneWorkers(workers), cloneTargets(targets), actionRange, maxActions),
+		label:   "baseline",
+	})
+
+	// Candidate 1+: boost каждой construction до 20000
+	for _, constr := range arena.Construction {
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			if modTargets[i].name == "Finish Construction" &&
+				modTargets[i].pos[0] == constr.Position[0] && modTargets[i].pos[1] == constr.Position[1] {
+				modTargets[i].baseVal = 20000
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   fmt.Sprintf("focus_constr_%d_%d", constr.Position[0], constr.Position[1]),
+		})
+	}
+
+	// Candidate: boost топ-3 expansion targets
+	type expCandidate struct {
+		pos []int
+		val float64
+	}
+	var expCands []expCandidate
+	for _, t := range targets {
+		if t.name == "Expansion" {
+			expCands = append(expCands, expCandidate{pos: t.pos, val: t.baseVal})
+		}
+	}
+	// Sort by val descending (simple selection sort, small N)
+	for i := 0; i < len(expCands); i++ {
+		for j := i + 1; j < len(expCands); j++ {
+			if expCands[j].val > expCands[i].val {
+				expCands[i], expCands[j] = expCands[j], expCands[i]
+			}
+		}
+	}
+	// Boost top 3
+	limit3 := 3
+	if limit3 > len(expCands) {
+		limit3 = len(expCands)
+	}
+	for k := 0; k < limit3; k++ {
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			if modTargets[i].name == "Expansion" &&
+				modTargets[i].pos[0] == expCands[k].pos[0] && modTargets[i].pos[1] == expCands[k].pos[1] {
+				modTargets[i].baseVal = 15000
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   fmt.Sprintf("focus_exp_%d_%d", expCands[k].pos[0], expCands[k].pos[1]),
+		})
+	}
+
+	// Candidate: suppress all construction → force expansion
+	if len(arena.Construction) > 0 && len(expCands) > 0 {
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			if modTargets[i].name == "Finish Construction" {
+				modTargets[i].baseVal = 100
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   "force_expansion",
+		})
+	}
+
+	// Candidate: suppress all expansion → force finish
+	if len(arena.Construction) > 0 && len(expCands) > 0 {
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			if modTargets[i].name == "Expansion" {
+				modTargets[i].baseVal = 100
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   "force_finish",
+		})
+	}
+
+	// --- SIMULATE EACH CANDIDATE 2 TURNS FORWARD ---
+	root := newSimState(arena)
+	discount := 0.8
+	bestScore := -math.MaxFloat64
+	bestIdx := 0
+
+	for i, cand := range candidates {
+		sim := root.clone()
+		buildCmds := extractBuildCmds(cand.actions, arena)
+
+		totalScore := 0.0
+		for t := 0; t < 2; t++ {
+			turnScore := sim.advance(buildCmds)
+			totalScore += math.Pow(discount, float64(t)) * turnScore
+		}
+		// Terminal bonus: больше плантаций = экспоненциальный рост
+		totalScore += math.Pow(discount, 2) * float64(len(sim.plants)) * 200
+		// Бонус за незавершённые стройки (прогресс ≈ инвестиция)
+		for _, prog := range sim.constructions {
+			totalScore += math.Pow(discount, 2) * float64(prog) * 2
+		}
+
+		if totalScore > bestScore {
+			bestScore = totalScore
+			bestIdx = i
+		}
+	}
+
+	b.Log(fmt.Sprintf("BeamSearch: %d candidates, winner=%s (score=%.0f)",
+		len(candidates), candidates[bestIdx].label, bestScore))
+
+	return candidates[bestIdx].actions
 }
 
+// ========================================================================
+// Scoring Functions
+// ========================================================================
+
 // buildScore — ROI от строительства новой плантации.
-// Учитывает: усиленные клетки, chain penalty, anti-overbuild.
 func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, overbuiltRatio float64) float64 {
 	cellValue := 1000.0
 	if pos[0]%7 == 0 && pos[1]%7 == 0 {
@@ -471,7 +691,7 @@ func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, over
 		score *= (1.0 - (overbuiltRatio-0.8)*5)
 	}
 
-	// Штраф за близких бобров/врагов
+	// FIX #1: ШТРАФ (а не бонус!) за близость к бобрам/врагам
 	minB, minE := 999, 999
 	for _, bvr := range arena.Beavers {
 		if d := manhattanDistance(pos, bvr.Position); d < minB {
@@ -484,10 +704,10 @@ func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, over
 		}
 	}
 	if minB < 25 {
-		score += float64(25-minB) * 8
+		score -= float64(25-minB) * 8 // WAS += (bug), NOW -= (penalty)
 	}
 	if minE < 25 {
-		score += float64(25-minE) * 6
+		score -= float64(25-minE) * 6 // WAS += (bug), NOW -= (penalty)
 	}
 
 	if score < 1 {
@@ -496,8 +716,7 @@ func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, over
 	return score
 }
 
-// sabotageScore — ценность диверсии врага.
-// Kill-finish: если почти мёртв → максимальный приоритет.
+// sabotageScore — ценность диверсии врага. Kill-finish priority.
 func (b *Bot) sabotageScore(enemy api.EnemyPlantation) float64 {
 	if enemy.Hp <= 10 {
 		return 5000.0 // kill-finish priority MAX
@@ -508,9 +727,12 @@ func (b *Bot) sabotageScore(enemy api.EnemyPlantation) float64 {
 		cellValue = 1500.0
 	}
 
-	denyFuture := cellValue * 0.8
-	return denyFuture
+	return cellValue * 0.8
 }
+
+// ========================================================================
+// Upgrades
+// ========================================================================
 
 func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 	tierMap := make(map[string]api.PlantationUpgradeTierItem)
@@ -551,6 +773,10 @@ func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 	}
 	return ""
 }
+
+// ========================================================================
+// Helpers
+// ========================================================================
 
 func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {
 	for _, t := range arena.PlantationUpgrades.Tiers {

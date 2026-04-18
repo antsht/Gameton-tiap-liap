@@ -120,6 +120,41 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			if bestPos != nil {
 				cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {bestPos[0], bestPos[1]}}
 				b.Log(fmt.Sprintf("EVACUATE CU %v→%v (prog=%d%%)", mainPos, bestPos, progress))
+				relocated = true
+			}
+		}
+
+		// Strategic Relocation: move towards "center of mass" if current cell is finished
+		if !relocated && progress >= 60 {
+			var bestPos []int
+			bestScore := -1.0
+
+			for _, p := range arena.Plantations {
+				if p.IsMain || p.IsIsolated || p.Hp < 25 {
+					continue
+				}
+				dx, dy := abs(p.Position[0]-mainPos[0]), abs(p.Position[1]-mainPos[1])
+				if dx+dy == 1 {
+					// Score based on how many neighbors this new position has
+					neighbors := 0
+					for _, other := range arena.Plantations {
+						if manhattanDistance(p.Position, other.Position) == 1 {
+							neighbors++
+						}
+					}
+					pProg := b.getCellProgress(arena, p.Position)
+					score := float64(neighbors)*100.0 - float64(pProg)
+
+					if score > bestScore {
+						bestScore = score
+						bestPos = []int{p.Position[0], p.Position[1]}
+					}
+				}
+			}
+			// Only move if the improvement is significant or current cell is very high progress
+			if bestPos != nil && (bestScore > 150 || progress >= 95) {
+				cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {bestPos[0], bestPos[1]}}
+				b.Log(fmt.Sprintf("STRATEGIC RELOCATE CU %v→%v (score=%.1f)", mainPos, bestPos, bestScore))
 			}
 		}
 	}
@@ -151,19 +186,17 @@ type target struct {
 	flat     bool // если true — нет diminishing returns (стройка)
 }
 
-func (t *target) marginalGain(chainPenalty int) float64 {
-	if t.flat {
-		eff := 5 - chainPenalty
-		if eff <= 0 {
-			return 0
-		}
-		return t.baseVal * float64(eff)
-	}
-	eff := 5 - t.usage - chainPenalty
+func (t *target) marginalGain(workerUsedActions int, chainPenalty int) float64 {
+	eff := 5 - workerUsedActions - chainPenalty
 	if eff <= 0 {
 		return 0
 	}
-	return t.baseVal * float64(eff)
+	// Parallelization bias for constructions: slightly favor new targets if many commands are already assigned.
+	bias := 1.0
+	if t.flat && t.usage > 0 {
+		bias = math.Max(0.7, 1.0-float64(t.usage)*0.03)
+	}
+	return t.baseVal * float64(eff) * bias
 }
 
 type worker struct {
@@ -317,7 +350,7 @@ func greedyAllocate(
 					continue
 				}
 				chainPenalty := dist
-				score := t.marginalGain(chainPenalty)
+				score := t.marginalGain(w.usedActions, chainPenalty)
 				if score > bestScore {
 					bestScore = score
 					bestWorker = w
@@ -470,7 +503,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		if neighborCount >= 2 {
 			targets = append(targets, target{
 				name: "Repair Bridge", pos: p.Position,
-				baseVal: 5000, maxUsage: 3,
+				baseVal: 8000, maxUsage: 3,
 			})
 			b.Log(fmt.Sprintf("BRIDGE REPAIR: %v hp=%d (connects %d neighbors)", p.Position, p.Hp, neighborCount))
 		}
@@ -615,7 +648,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 						if !boosted && !b.isOccupied(arena, n) {
 							targets = append(targets, target{
 								name: "Reconnect", pos: n,
-								baseVal: 9000, maxUsage: 50, flat: true,
+								baseVal: 12000, maxUsage: 50, flat: true,
 							})
 						}
 						b.Log(fmt.Sprintf("RECONNECT target: %v (bridges %v to %v)", n, cp.Position, ip.Position))
@@ -729,13 +762,64 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		label:   "baseline",
 	})
 
-	// Candidate 1+: boost каждой construction до 20000
+	// Candidate 2: defensive (focus on survival and connectivity)
+	{
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			switch modTargets[i].name {
+			case "Repair CU":
+				modTargets[i].baseVal *= 2.0
+			case "Reconnect", "Repair Bridge", "Preemptive Bridge":
+				modTargets[i].baseVal *= 1.8
+			case "Repair Colony":
+				modTargets[i].baseVal *= 1.5
+			case "Expansion", "Finish Construction":
+				modTargets[i].baseVal *= 0.5
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   "defensive",
+		})
+	}
+
+	// Candidate 3: aggressive_expansion
+	{
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			if modTargets[i].name == "Expansion" || modTargets[i].name == "Finish Construction" {
+				modTargets[i].baseVal *= 2.0
+			} else if modTargets[i].name == "Sabotage Enemy" || modTargets[i].name == "Hunt Beaver" {
+				modTargets[i].baseVal *= 0.5
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   "aggressive_expansion",
+		})
+	}
+
+	// Candidate 4: vicious (sabotage and beavers)
+	{
+		modTargets := cloneTargets(targets)
+		for i := range modTargets {
+			if modTargets[i].name == "Sabotage Enemy" || modTargets[i].name == "Hunt Beaver" {
+				modTargets[i].baseVal *= 2.5
+			}
+		}
+		candidates = append(candidates, beamCandidate{
+			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
+			label:   "vicious",
+		})
+	}
+
+	// Candidate 5+: focus each active construction
 	for _, constr := range arena.Construction {
 		modTargets := cloneTargets(targets)
 		for i := range modTargets {
 			if modTargets[i].name == "Finish Construction" &&
 				modTargets[i].pos[0] == constr.Position[0] && modTargets[i].pos[1] == constr.Position[1] {
-				modTargets[i].baseVal = 20000
+				modTargets[i].baseVal = 25000
 			}
 		}
 		candidates = append(candidates, beamCandidate{
@@ -744,75 +828,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		})
 	}
 
-	// Candidate: boost топ-3 expansion targets
-	type expCandidate struct {
-		pos []int
-		val float64
-	}
-	var expCands []expCandidate
-	for _, t := range targets {
-		if t.name == "Expansion" {
-			expCands = append(expCands, expCandidate{pos: t.pos, val: t.baseVal})
-		}
-	}
-	// Sort by val descending (simple selection sort, small N)
-	for i := 0; i < len(expCands); i++ {
-		for j := i + 1; j < len(expCands); j++ {
-			if expCands[j].val > expCands[i].val {
-				expCands[i], expCands[j] = expCands[j], expCands[i]
-			}
-		}
-	}
-	// Boost top 3
-	limit3 := 3
-	if limit3 > len(expCands) {
-		limit3 = len(expCands)
-	}
-	for k := 0; k < limit3; k++ {
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			if modTargets[i].name == "Expansion" &&
-				modTargets[i].pos[0] == expCands[k].pos[0] && modTargets[i].pos[1] == expCands[k].pos[1] {
-				modTargets[i].baseVal = 15000
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
-			label:   fmt.Sprintf("focus_exp_%d_%d", expCands[k].pos[0], expCands[k].pos[1]),
-		})
-	}
-
-	// Candidate: suppress all construction → force expansion
-	if len(arena.Construction) > 0 && len(expCands) > 0 {
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			if modTargets[i].name == "Finish Construction" {
-				modTargets[i].baseVal = 100
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
-			label:   "force_expansion",
-		})
-	}
-
-	// Candidate: suppress all expansion → force finish
-	if len(arena.Construction) > 0 && len(expCands) > 0 {
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			if modTargets[i].name == "Expansion" {
-				modTargets[i].baseVal = 100
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, actionRange, maxActions),
-			label:   "force_finish",
-		})
-	}
-
-	// --- SIMULATE EACH CANDIDATE 2 TURNS FORWARD ---
+	// --- SIMULATE EACH CANDIDATE 3 TURNS FORWARD ---
 	root := newSimState(arena)
-	discount := 0.8
+	discount := 0.85
 	bestScore := -math.MaxFloat64
 	bestIdx := 0
 
@@ -821,15 +839,14 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		buildCmds := extractBuildCmds(cand.actions, arena)
 
 		totalScore := 0.0
-		for t := 0; t < 2; t++ {
+		for t := 0; t < 3; t++ {
 			turnScore := sim.advance(buildCmds)
 			totalScore += math.Pow(discount, float64(t)) * turnScore
 		}
-		// Terminal bonus: больше плантаций = экспоненциальный рост
-		totalScore += math.Pow(discount, 2) * float64(len(sim.plants)) * 200
-		// Бонус за незавершённые стройки (прогресс ≈ инвестиция)
+		// Terminal bonus: экспоненциальный рост (плантации + прогресс)
+		totalScore += math.Pow(discount, 3) * float64(len(sim.plants)) * 300
 		for _, prog := range sim.constructions {
-			totalScore += math.Pow(discount, 2) * float64(prog) * 2
+			totalScore += math.Pow(discount, 3) * float64(prog) * 3
 		}
 
 		if totalScore > bestScore {

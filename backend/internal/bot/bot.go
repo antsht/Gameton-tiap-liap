@@ -1,10 +1,8 @@
 package bot
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -26,25 +24,13 @@ type Bot struct {
 	mu     sync.Mutex
 	logCh  chan string
 
+	turnLogMu   sync.Mutex
+	turnLogOnce sync.Once
+
 	// Strategy state between turns.
 	currentAxis     string
 	buildTarget     []int
 	pendingRelocate []int
-}
-
-func (b *Bot) dumpTurn(arena *api.PlayerResponse, cmd api.PlayerCommand) {
-	// Сохраняем в папке logs текущей директории запущеного процесса
-	os.MkdirAll("logs", 0755)
-
-	filename := fmt.Sprintf("logs/turn_%d.json", arena.TurnNo)
-
-	data := map[string]interface{}{
-		"received_arena": arena,
-		"sent_command":   cmd,
-	}
-
-	bytes, _ := json.MarshalIndent(data, "", "  ")
-	os.WriteFile(filename, bytes, 0644)
 }
 
 func NewBot(client *api.Client) *Bot {

@@ -561,7 +561,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			if !p.IsMain && !p.IsIsolated && p.Hp > 0 && p.Hp <= 25 {
 				targets = append(targets, target{
 					name: "Repair Colony", pos: p.Position,
-					baseVal: 600, maxUsage: 2,
+					baseVal: 125000, maxUsage: 3, // Scaled up to ~100k+ ROI
 				})
 			}
 		}
@@ -587,7 +587,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		if neighborCount >= 2 {
 			targets = append(targets, target{
 				name: "Repair Bridge", pos: p.Position,
-				baseVal: 120000, maxUsage: 3, // Scaled to ~100k+
+				baseVal: 140000, maxUsage: 3, // Prioritize bridges over generic colonies
 			})
 			b.Log(fmt.Sprintf("BRIDGE REPAIR: %v hp=%d (connects %d neighbors)", p.Position, p.Hp, neighborCount))
 		}
@@ -989,7 +989,7 @@ func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, over
 		}
 	}
 	if neighbors > 1 {
-		score += float64(neighbors-1) * 3000
+		score += float64(neighbors-1) * 15000 // Huge bonus for grid/loop redundancy
 	}
 
 	// FOCUS BONUS: Favor existing progress heavily.
@@ -1032,9 +1032,9 @@ func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 		tierMap[t.Name] = t
 	}
 
-	// 0. Bug #7: ЭКСТРЕННО: землетрясение только если turnsUntil <= 1 и current == 0
+	// 0. Bug #7: ЭКСТРЕННО: землетрясение. Масштабируем до turnsUntil <= 2 для надежности.
 	for _, m := range arena.MeteoForecasts {
-		if m.Kind == "earthquake" && m.TurnsUntil <= 1 {
+		if m.Kind == "earthquake" && m.TurnsUntil <= 2 {
 			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current == 0 {
 				return "earthquake_mitigation"
 			}

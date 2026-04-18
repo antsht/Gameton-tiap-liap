@@ -198,10 +198,12 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	var tasks []targetTask
 
+	/* РЕМОНТ ОТКЛЮЧЕН
 	// ПРИОРИТЕТ 1000: Ремонт ЦУ
 	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 45 {
 		tasks = append(tasks, targetTask{"Repair CU", mainPlantation.Position, 5, 0, 1000})
 	}
+	*/
 
 	// ПРИОРИТЕТ 900: Охота на бобров
 	for _, bvr := range arena.Beavers {
@@ -228,6 +230,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		tasks = append(tasks, targetTask{"Sabotage Enemy", enemy.Position, 4, 0, 700})
 	}
 
+	/* РЕМОНТ ОТКЛЮЧЕН
 	// ПРИОРИТЕТ 600: Ремонт обычных плантаций (ТОЛЬКО ЕСЛИ НЕ АГРЕССИВНЫ)
 	if !isAggressive {
 		for _, p := range arena.Plantations {
@@ -236,6 +239,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			}
 		}
 	}
+	*/
 
 	// ПРИОРИТЕТ 1-500: Экспансия
 	limit := b.getMaxPlantations(arena)
@@ -364,11 +368,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 					continue
 				}
 
-				// Don't act on yourself unless repairing
-				if tasks[i].name != "Repair CU" && tasks[i].name != "Repair Colony" {
-					if w.p.Position[0] == tasks[i].pos[0] && w.p.Position[1] == tasks[i].pos[1] {
-						continue
-					}
+				// Клетка никогда не действует на саму себя (ремонт отключен)
+				if w.p.Position[0] == tasks[i].pos[0] && w.p.Position[1] == tasks[i].pos[1] {
+					continue
 				}
 
 				if manhattanDistance(w.p.Position, tasks[i].pos) <= actionRange {

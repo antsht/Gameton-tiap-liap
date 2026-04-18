@@ -371,7 +371,15 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 					}
 				}
 
-				if manhattanDistance(w.p.Position, tasks[i].pos) <= actionRange {
+				effectiveRange := actionRange
+				// Специальное правило: для строительства и расширения используем радиус 2, если основной меньше
+				if tasks[i].name == "Finish Construction" || tasks[i].name == "Expansion" || tasks[i].name == "Expansion (Escape)" {
+					if effectiveRange < 2 {
+						effectiveRange = 2
+					}
+				}
+
+				if manhattanDistance(w.p.Position, tasks[i].pos) <= effectiveRange {
 					actions = append(actions, api.PlantationAction{
 						Path: [][]int{{w.p.Position[0], w.p.Position[1]}, {tasks[i].pos[0], tasks[i].pos[1]}},
 					})

@@ -175,6 +175,27 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		assigned int
 		priority int
 	}
+	isSafe := func(pos []int) bool {
+		for _, m := range arena.MeteoForecasts {
+			// Sandstorm: don't build in current or next position
+			if m.Kind == "sandstorm" {
+				if distSq(pos, m.Position) <= m.Radius*m.Radius {
+					return false
+				}
+				if distSq(pos, m.NextPosition) <= m.Radius*m.Radius {
+					return false
+				}
+			}
+			// Earthquake: destroy everything in radius
+			if m.Kind == "earthquake" && m.TurnsUntil <= 2 {
+				if distSq(pos, m.Position) <= m.Radius*m.Radius {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
 	var tasks []targetTask
 
 	// ПРИОРИТЕТ 1000: Ремонт ЦУ
@@ -187,13 +208,17 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		tasks = append(tasks, targetTask{"Hunt Beaver", bvr.Position, 4, 0, 400})
 	}
 
-	// ПРИОРИТЕТ 800: Достройка текущих объектов
+	// ПРИОРИТЕТ 1500: Достройка текущих объектов (Всегда выше экспансии и ремонта)
 	for _, constr := range arena.Construction {
+		if !isSafe(constr.Position) {
+			b.Log(fmt.Sprintf("Skipping construction at %v due to meteo threat", constr.Position))
+			continue
+		}
 		needed := 5
-		prio := 800
+		prio := 1500
 		if constr.Progress >= 90 {
-			needed = 50 // Ultra-Finish: бросаем всех дронов
-			prio = 1100 // Выше чем ремонт ЦУ, чтобы точно достроить за ход
+			needed = 50 // Ultra-Finish
+			prio = 2000
 		}
 		tasks = append(tasks, targetTask{"Finish Construction", constr.Position, needed, 0, prio})
 	}
@@ -216,24 +241,18 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	limit := b.getMaxPlantations(arena)
 	currentCount := len(arena.Plantations) + len(arena.Construction)
 	if currentCount < limit {
-		isSafe := func(pos []int) bool {
-			for _, m := range arena.MeteoForecasts {
-				if m.Kind == "sandstorm" {
-					if d := distSq(pos, m.Position); d <= m.Radius*m.Radius {
-						return false
-					}
-					if d := distSq(pos, m.NextPosition); d <= m.Radius*m.Radius {
-						return false
-					}
-				}
-			}
-			return true
+		expansionOffsets := [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
+		if currentCount == 1 {
+			expansionOffsets = [][]int{{-1, 0}, {1, 0}}
+		} else if currentCount == 2 {
+			expansionOffsets = [][]int{{0, -1}, {0, 1}}
 		}
 
 		// Escape route build
 		if mainPlantation.Hp > 0 {
 			hasSafe := false
 			cuProg := b.getCellProgress(arena, mainPlantation.Position)
+			// Neighbor check is always in 4 directions
 			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
 				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 				if b.isUnderConstruction(arena, n) {
@@ -248,7 +267,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 				}
 			}
 			if !hasSafe {
-				for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+				for _, offset := range expansionOffsets {
 					n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 					if !b.isOccupied(arena, n) && isSafe(n) {
 						tasks = append(tasks, targetTask{"Expansion (Escape)", n, 5, 0, 500})
@@ -263,7 +282,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			if p.IsIsolated {
 				continue
 			}
-			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+			for _, offset := range expansionOffsets {
 				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) && isSafe(n) {
 					// Deduplicate Expansion
@@ -285,6 +304,15 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 					} else if n[0]%7 == 0 || n[1]%7 == 0 {
 						prio += 1
 					}
+
+					// Бонус за "плотность" - чем больше соседей-плантаций, тем выше приоритет
+					ourNeighbors := 0
+					for _, off := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+						if b.isOurControl(arena, []int{n[0] + off[0], n[1] + off[1]}) {
+							ourNeighbors++
+						}
+					}
+					prio += ourNeighbors * 100
 
 					minB, minE := 999, 999
 					for _, bvr := range arena.Beavers {
@@ -411,6 +439,20 @@ func (b *Bot) getCellProgress(arena *api.PlayerResponse, pos []int) int {
 		}
 	}
 	return 0
+}
+
+func (b *Bot) isOurControl(arena *api.PlayerResponse, pos []int) bool {
+	for _, p := range arena.Plantations {
+		if p.Position[0] == pos[0] && p.Position[1] == pos[1] {
+			return true
+		}
+	}
+	for _, c := range arena.Construction {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *Bot) isUnderConstruction(arena *api.PlayerResponse, pos []int) bool {

@@ -282,6 +282,8 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 					prio := d
 					if n[0]%7 == 0 && n[1]%7 == 0 {
 						prio += 50
+					} else if n[0]%7 == 0 || n[1]%7 == 0 {
+						prio += 1
 					}
 
 					minB, minE := 999, 999

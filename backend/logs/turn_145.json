@@ -1,0 +1,259 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          191,
+          119
+        ],
+        "terraformationProgress": 25,
+        "turnsUntilDegradation": 55
+      },
+      {
+        "position": [
+          192,
+          119
+        ],
+        "terraformationProgress": 70,
+        "turnsUntilDegradation": 46
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          193,
+          119
+        ],
+        "progress": 40
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          242,
+          242
+        ],
+        "position": [
+          241,
+          241
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        188,
+        117
+      ]
+    ],
+    "nextTurnIn": 0.926,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 4,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 5
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "86e5e082-8d73-4169-8ff0-320c4a7a3b56",
+        "immunityUntilTurn": 144,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          191,
+          119
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "c02b82ce-79ae-46ef-af01-3581ed97f6c1",
+        "immunityUntilTurn": 134,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          192,
+          119
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 145
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            193,
+            119
+          ]
+        ]
+      }
+    ]
+  }
+}

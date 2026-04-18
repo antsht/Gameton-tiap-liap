@@ -1,0 +1,306 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [
+      {
+        "hp": 100,
+        "id": "beaver-lodge-902",
+        "position": [
+          25,
+          102
+        ]
+      }
+    ],
+    "cells": [
+      {
+        "position": [
+          29,
+          106
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 28
+      },
+      {
+        "position": [
+          28,
+          106
+        ],
+        "terraformationProgress": 90,
+        "turnsUntilDegradation": 42
+      },
+      {
+        "position": [
+          28,
+          105
+        ],
+        "terraformationProgress": 65,
+        "turnsUntilDegradation": 47
+      }
+    ],
+    "construction": [],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "",
+        "kind": "earthquake",
+        "position": null,
+        "radius": 0,
+        "turnsUntil": 2
+      },
+      {
+        "forming": false,
+        "id": "b20f8506-28b8-4e09-a0d5-ab0a8f647c58",
+        "kind": "sandstorm",
+        "nextPosition": [
+          286,
+          286
+        ],
+        "position": [
+          285,
+          285
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        27,
+        108
+      ],
+      [
+        30,
+        105
+      ],
+      [
+        27,
+        103
+      ],
+      [
+        26,
+        109
+      ],
+      [
+        25,
+        109
+      ],
+      [
+        28,
+        108
+      ]
+    ],
+    "nextTurnIn": 0.412,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 10,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 3,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 27
+    },
+    "plantations": [
+      {
+        "hp": 42,
+        "id": "211dc0f7-1105-402d-a433-2bc63b887f4a",
+        "immunityUntilTurn": 379,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          28,
+          106
+        ]
+      },
+      {
+        "hp": 42,
+        "id": "13dd16a5-0922-48d9-85f1-496d49ad0799",
+        "immunityUntilTurn": 384,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          28,
+          105
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 393
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            28,
+            106
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            106
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            106
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            106
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            106
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            105
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            105
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            105
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            105
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            28,
+            105
+          ],
+          [
+            29,
+            106
+          ]
+        ]
+      }
+    ],
+    "relocateMain": [
+      [
+        28,
+        106
+      ],
+      [
+        28,
+        105
+      ]
+    ]
+  }
+}

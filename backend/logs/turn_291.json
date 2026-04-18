@@ -1,0 +1,166 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [],
+    "construction": [],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "",
+        "kind": "earthquake",
+        "position": null,
+        "radius": 0,
+        "turnsUntil": 1
+      },
+      {
+        "forming": false,
+        "id": "b20f8506-28b8-4e09-a0d5-ab0a8f647c58",
+        "kind": "sandstorm",
+        "nextPosition": [
+          184,
+          184
+        ],
+        "position": [
+          183,
+          183
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [],
+    "nextTurnIn": 0.988,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 9,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 9
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "4a8de091-8e67-436d-b55a-4f1ff6d7d0a7",
+        "immunityUntilTurn": 294,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          21,
+          123
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 291
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            21,
+            123
+          ],
+          [
+            20,
+            123
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            21,
+            123
+          ],
+          [
+            20,
+            123
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            21,
+            123
+          ],
+          [
+            20,
+            123
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            21,
+            123
+          ],
+          [
+            20,
+            123
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            21,
+            123
+          ],
+          [
+            20,
+            123
+          ]
+        ]
+      }
+    ]
+  }
+}

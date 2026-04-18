@@ -1,0 +1,330 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          193,
+          119
+        ],
+        "terraformationProgress": 5,
+        "turnsUntilDegradation": 59
+      },
+      {
+        "position": [
+          191,
+          119
+        ],
+        "terraformationProgress": 30,
+        "turnsUntilDegradation": 54
+      },
+      {
+        "position": [
+          192,
+          119
+        ],
+        "terraformationProgress": 75,
+        "turnsUntilDegradation": 45
+      }
+    ],
+    "construction": [],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          243,
+          243
+        ],
+        "position": [
+          242,
+          242
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        188,
+        117
+      ]
+    ],
+    "nextTurnIn": 0.952,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 4,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 4
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "fd601d03-9350-413a-bcb0-eeac626e809a",
+        "immunityUntilTurn": 149,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          193,
+          119
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "86e5e082-8d73-4169-8ff0-320c4a7a3b56",
+        "immunityUntilTurn": 144,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          191,
+          119
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "c02b82ce-79ae-46ef-af01-3581ed97f6c1",
+        "immunityUntilTurn": 134,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          192,
+          119
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 146
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            119
+          ],
+          [
+            192,
+            118
+          ]
+        ]
+      }
+    ]
+  }
+}

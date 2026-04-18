@@ -1,0 +1,338 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          193,
+          129
+        ],
+        "terraformationProgress": 15,
+        "turnsUntilDegradation": 57
+      },
+      {
+        "position": [
+          191,
+          129
+        ],
+        "terraformationProgress": 40,
+        "turnsUntilDegradation": 52
+      },
+      {
+        "position": [
+          192,
+          129
+        ],
+        "terraformationProgress": 90,
+        "turnsUntilDegradation": 42
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          192,
+          128
+        ],
+        "progress": 15
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          211,
+          211
+        ],
+        "position": [
+          210,
+          210
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        189,
+        131
+      ]
+    ],
+    "nextTurnIn": 0.927,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 3,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 6
+    },
+    "plantations": [
+      {
+        "hp": 40,
+        "id": "4ef6bde8-59dd-47bd-92f1-c7ea430d4694",
+        "immunityUntilTurn": 110,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          191,
+          129
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "a09b70e2-e713-4c25-a62e-c941ca3b16f6",
+        "immunityUntilTurn": 115,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          193,
+          129
+        ]
+      },
+      {
+        "hp": 40,
+        "id": "2c2dd14f-a7bc-4a03-b118-97c03f39d886",
+        "immunityUntilTurn": 99,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          192,
+          129
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 114
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            192,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            191,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            193,
+            129
+          ],
+          [
+            192,
+            128
+          ]
+        ]
+      }
+    ]
+  }
+}

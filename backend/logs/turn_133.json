@@ -1,0 +1,175 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          192,
+          119
+        ],
+        "terraformationProgress": 10,
+        "turnsUntilDegradation": 58
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          191,
+          119
+        ],
+        "progress": 10
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          230,
+          230
+        ],
+        "position": [
+          229,
+          229
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [],
+    "nextTurnIn": 0.965,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 4,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 17
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "c02b82ce-79ae-46ef-af01-3581ed97f6c1",
+        "immunityUntilTurn": 134,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          192,
+          119
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 133
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            191,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            191,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            191,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            191,
+            119
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            192,
+            119
+          ],
+          [
+            191,
+            119
+          ]
+        ]
+      }
+    ]
+  }
+}

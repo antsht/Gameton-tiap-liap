@@ -1,0 +1,259 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          255,
+          66
+        ],
+        "terraformationProgress": 20,
+        "turnsUntilDegradation": 56
+      },
+      {
+        "position": [
+          256,
+          66
+        ],
+        "terraformationProgress": 65,
+        "turnsUntilDegradation": 47
+      }
+    ],
+    "construction": [],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          275,
+          275
+        ],
+        "position": [
+          274,
+          274
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        259,
+        64
+      ],
+      [
+        259,
+        65
+      ],
+      [
+        258,
+        67
+      ]
+    ],
+    "nextTurnIn": 0.885,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 5,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 2
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "6619a312-f688-4a0f-bdd0-50b90217a9d0",
+        "immunityUntilTurn": 178,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          255,
+          66
+        ]
+      },
+      {
+        "hp": 40,
+        "id": "44515d6c-e086-4a8e-99b7-c0ca166ff7fa",
+        "immunityUntilTurn": 168,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          256,
+          66
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 178
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            255,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            255,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            255,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            255,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            255,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            66
+          ],
+          [
+            254,
+            66
+          ]
+        ]
+      }
+    ]
+  }
+}

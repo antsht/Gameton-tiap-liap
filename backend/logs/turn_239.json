@@ -1,0 +1,264 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [],
+    "cells": [
+      {
+        "position": [
+          283,
+          59
+        ],
+        "terraformationProgress": 85,
+        "turnsUntilDegradation": 43
+      },
+      {
+        "position": [
+          282,
+          59
+        ],
+        "terraformationProgress": 15,
+        "turnsUntilDegradation": 57
+      }
+    ],
+    "construction": [
+      {
+        "position": [
+          284,
+          59
+        ],
+        "progress": 20
+      }
+    ],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          336,
+          336
+        ],
+        "position": [
+          335,
+          335
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [],
+    "nextTurnIn": 0.898,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 0,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 7,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 1
+    },
+    "plantations": [
+      {
+        "hp": 40,
+        "id": "c85c8fa0-bf88-4178-a4c0-511a318a2a17",
+        "immunityUntilTurn": 225,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          283,
+          59
+        ]
+      },
+      {
+        "hp": 50,
+        "id": "51caedeb-c1ea-4973-b249-6f8b95b8c614",
+        "immunityUntilTurn": 240,
+        "isIsolated": false,
+        "isMain": false,
+        "position": [
+          282,
+          59
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 239
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            283,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            283,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            283,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            283,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            283,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            282,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            282,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            282,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            282,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            282,
+            59
+          ],
+          [
+            284,
+            59
+          ]
+        ]
+      }
+    ],
+    "relocateMain": [
+      [
+        283,
+        59
+      ],
+      [
+        282,
+        59
+      ]
+    ]
+  }
+}

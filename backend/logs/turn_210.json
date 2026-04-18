@@ -1,0 +1,260 @@
+{
+  "received_arena": {
+    "actionRange": 2,
+    "beavers": [
+      {
+        "hp": 100,
+        "id": "beaver-lodge-574",
+        "position": [
+          258,
+          61
+        ]
+      }
+    ],
+    "cells": [
+      {
+        "position": [
+          255,
+          65
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 36
+      },
+      {
+        "position": [
+          255,
+          64
+        ],
+        "terraformationProgress": 20,
+        "turnsUntilDegradation": 56
+      },
+      {
+        "position": [
+          254,
+          65
+        ],
+        "terraformationProgress": 65,
+        "turnsUntilDegradation": 47
+      },
+      {
+        "position": [
+          255,
+          66
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 24
+      },
+      {
+        "position": [
+          256,
+          65
+        ],
+        "terraformationProgress": 40,
+        "turnsUntilDegradation": 52
+      },
+      {
+        "position": [
+          256,
+          66
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 15
+      },
+      {
+        "position": [
+          254,
+          66
+        ],
+        "terraformationProgress": 100,
+        "turnsUntilDegradation": 32
+      }
+    ],
+    "construction": [],
+    "enemy": [],
+    "meteoForecasts": [
+      {
+        "forming": false,
+        "id": "93e71e0d-8f5a-4591-bfd0-197723069cee",
+        "kind": "sandstorm",
+        "nextPosition": [
+          307,
+          307
+        ],
+        "position": [
+          306,
+          306
+        ],
+        "radius": 30,
+        "turnsUntil": 0
+      }
+    ],
+    "mountains": [
+      [
+        259,
+        64
+      ],
+      [
+        259,
+        65
+      ],
+      [
+        258,
+        67
+      ]
+    ],
+    "nextTurnIn": 0.956,
+    "plantationUpgrades": {
+      "intervalTurns": 30,
+      "maxPoints": 15,
+      "points": 1,
+      "tiers": [
+        {
+          "current": 0,
+          "max": 3,
+          "name": "repair_power"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "max_hp"
+        },
+        {
+          "current": 6,
+          "max": 10,
+          "name": "settlement_limit"
+        },
+        {
+          "current": 0,
+          "max": 10,
+          "name": "signal_range"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "vision_range"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "decay_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 3,
+          "name": "earthquake_mitigation"
+        },
+        {
+          "current": 0,
+          "max": 5,
+          "name": "beaver_damage_mitigation"
+        }
+      ],
+      "turnsUntilPoints": 30
+    },
+    "plantations": [
+      {
+        "hp": 50,
+        "id": "ebaf55d3-8c3b-4617-bf18-25ad20e45e08",
+        "immunityUntilTurn": 206,
+        "isIsolated": false,
+        "isMain": true,
+        "position": [
+          256,
+          65
+        ]
+      },
+      {
+        "hp": 20,
+        "id": "b7789cc3-4786-480d-b459-574e58c71c42",
+        "immunityUntilTurn": 210,
+        "isIsolated": true,
+        "isMain": false,
+        "position": [
+          255,
+          64
+        ]
+      },
+      {
+        "hp": 10,
+        "id": "2171589c-df16-4abd-970f-b4de288dd32c",
+        "immunityUntilTurn": 201,
+        "isIsolated": true,
+        "isMain": false,
+        "position": [
+          254,
+          65
+        ]
+      }
+    ],
+    "size": [
+      378,
+      378
+    ],
+    "turnNo": 210
+  },
+  "sent_command": {
+    "command": [
+      {
+        "path": [
+          [
+            256,
+            65
+          ],
+          [
+            255,
+            65
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            65
+          ],
+          [
+            255,
+            65
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            65
+          ],
+          [
+            255,
+            65
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            65
+          ],
+          [
+            255,
+            65
+          ]
+        ]
+      },
+      {
+        "path": [
+          [
+            256,
+            65
+          ],
+          [
+            255,
+            65
+          ]
+        ]
+      }
+    ],
+    "plantationUpgrade": "settlement_limit"
+  }
+}

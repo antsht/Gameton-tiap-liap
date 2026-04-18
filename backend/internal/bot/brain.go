@@ -89,7 +89,9 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		if cuNeedsEqEscape {
 			b.Log(fmt.Sprintf("EMERGENCY! Earthquake in %d turns. CU lacks immunity!", eqTurns))
 			for _, p := range arena.Plantations {
-				if p.IsMain || p.IsIsolated { continue }
+				if p.IsMain || p.IsIsolated {
+					continue
+				}
 				dx, dy := abs(p.Position[0]-mainPos[0]), abs(p.Position[1]-mainPos[1])
 				if dx+dy == 1 && p.Hp >= 15 && p.ImmunityUntilTurn > arena.TurnNo+eqTurns {
 					cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {p.Position[0], p.Position[1]}}
@@ -104,7 +106,9 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			bestProg := progress
 			var bestPos []int
 			for _, p := range arena.Plantations {
-				if p.IsMain || p.IsIsolated { continue }
+				if p.IsMain || p.IsIsolated {
+					continue
+				}
 				dx, dy := abs(p.Position[0]-mainPos[0]), abs(p.Position[1]-mainPos[1])
 				if dx+dy == 1 {
 					pProg := b.getCellProgress(arena, p.Position)
@@ -139,7 +143,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	var actions []api.PlantationAction
 
 	type worker struct {
-		p api.Plantation
+		p           api.Plantation
 		usedActions int
 	}
 	workers := make(map[string]*worker)
@@ -154,7 +158,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	}
 
 	actionRange := arena.ActionRange
-	if actionRange <= 0 { actionRange = 1 }
+	if actionRange <= 0 {
+		actionRange = 1
+	}
 
 	isAggressive := len(arena.Plantations) < 10
 	if isAggressive {
@@ -178,7 +184,7 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	// ПРИОРИТЕТ 900: Охота на бобров
 	for _, bvr := range arena.Beavers {
-		tasks = append(tasks, targetTask{"Hunt Beaver", bvr.Position, 4, 0, 900})
+		tasks = append(tasks, targetTask{"Hunt Beaver", bvr.Position, 4, 0, 400})
 	}
 
 	// ПРИОРИТЕТ 800: Достройка текущих объектов
@@ -213,8 +219,12 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		isSafe := func(pos []int) bool {
 			for _, m := range arena.MeteoForecasts {
 				if m.Kind == "sandstorm" {
-					if d := distSq(pos, m.Position); d <= m.Radius*m.Radius { return false }
-					if d := distSq(pos, m.NextPosition); d <= m.Radius*m.Radius { return false }
+					if d := distSq(pos, m.Position); d <= m.Radius*m.Radius {
+						return false
+					}
+					if d := distSq(pos, m.NextPosition); d <= m.Radius*m.Radius {
+						return false
+					}
 				}
 			}
 			return true
@@ -224,18 +234,22 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		if mainPlantation.Hp > 0 {
 			hasSafe := false
 			cuProg := b.getCellProgress(arena, mainPlantation.Position)
-			for _, offset := range [][]int{{-1,0},{1,0},{0,-1},{0,1}} {
-				n := []int{mainPlantation.Position[0]+offset[0], mainPlantation.Position[1]+offset[1]}
-				if b.isUnderConstruction(arena, n) { hasSafe = true; break }
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
+				if b.isUnderConstruction(arena, n) {
+					hasSafe = true
+					break
+				}
 				for _, p := range arena.Plantations {
 					if p.Position[0] == n[0] && p.Position[1] == n[1] && p.Hp > 0 && b.getCellProgress(arena, p.Position) < cuProg {
-						hasSafe = true; break
+						hasSafe = true
+						break
 					}
 				}
 			}
 			if !hasSafe {
-				for _, offset := range [][]int{{-1,0},{1,0},{0,-1},{0,1}} {
-					n := []int{mainPlantation.Position[0]+offset[0], mainPlantation.Position[1]+offset[1]}
+				for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+					n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
 					if !b.isOccupied(arena, n) && isSafe(n) {
 						tasks = append(tasks, targetTask{"Expansion (Escape)", n, 5, 0, 500})
 						break
@@ -246,24 +260,47 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 		// Fill expansion candidates
 		for _, p := range arena.Plantations {
-			if p.IsIsolated { continue }
-			for _, offset := range [][]int{{-1,0},{1,0},{0,-1},{0,1}} {
-				n := []int{p.Position[0]+offset[0], p.Position[1]+offset[1]}
+			if p.IsIsolated {
+				continue
+			}
+			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
 				if !b.isOccupied(arena, n) && isSafe(n) {
 					// Deduplicate Expansion
 					exists := false
-					for _, t := range tasks { if t.name == "Expansion" && t.pos[0] == n[0] && t.pos[1] == n[1] { exists = true; break } }
-					if exists { continue }
+					for _, t := range tasks {
+						if t.name == "Expansion" && t.pos[0] == n[0] && t.pos[1] == n[1] {
+							exists = true
+							break
+						}
+					}
+					if exists {
+						continue
+					}
 
 					d := manhattanDistance(n, mainPlantation.Position)
 					prio := d
-					if n[0]%7 == 0 && n[1]%7 == 0 { prio += 50 }
-					
+					if n[0]%7 == 0 && n[1]%7 == 0 {
+						prio += 50
+					}
+
 					minB, minE := 999, 999
-					for _, bvr := range arena.Beavers { if d := manhattanDistance(n, bvr.Position); d < minB { minB = d } }
-					for _, enm := range arena.Enemy { if d := manhattanDistance(n, enm.Position); d < minE { minE = d } }
-					if minB < 25 { prio += (25-minB)*10 }
-					if minE < 25 { prio += (25-minE)*8 }
+					for _, bvr := range arena.Beavers {
+						if d := manhattanDistance(n, bvr.Position); d < minB {
+							minB = d
+						}
+					}
+					for _, enm := range arena.Enemy {
+						if d := manhattanDistance(n, enm.Position); d < minE {
+							minE = d
+						}
+					}
+					if minB < 25 {
+						prio += (25 - minB) * 10
+					}
+					if minE < 25 {
+						prio += (25 - minE) * 8
+					}
 
 					tasks = append(tasks, targetTask{"Expansion", n, 4, 0, prio})
 				}
@@ -274,7 +311,9 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 	// SORT TASKS
 	for i := 0; i < len(tasks); i++ {
 		for j := i + 1; j < len(tasks); j++ {
-			if tasks[j].priority > tasks[i].priority { tasks[i], tasks[j] = tasks[j], tasks[i] }
+			if tasks[j].priority > tasks[i].priority {
+				tasks[i], tasks[j] = tasks[j], tasks[i]
+			}
 		}
 	}
 
@@ -284,14 +323,22 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 	for layer := 0; layer < 5; layer++ {
 		for i := range tasks {
-			if tasks[i].assigned >= tasks[i].needed || currentActions >= maxActions { continue }
+			if tasks[i].assigned >= tasks[i].needed || currentActions >= maxActions {
+				continue
+			}
 			for _, w := range workers {
-				if tasks[i].assigned >= tasks[i].needed || currentActions >= maxActions { break }
-				if w.usedActions != layer { continue }
-				
+				if tasks[i].assigned >= tasks[i].needed || currentActions >= maxActions {
+					break
+				}
+				if w.usedActions != layer {
+					continue
+				}
+
 				// Don't act on yourself unless repairing
 				if tasks[i].name != "Repair CU" && tasks[i].name != "Repair Colony" {
-					if w.p.Position[0] == tasks[i].pos[0] && w.p.Position[1] == tasks[i].pos[1] { continue }
+					if w.p.Position[0] == tasks[i].pos[0] && w.p.Position[1] == tasks[i].pos[1] {
+						continue
+					}
 				}
 
 				if manhattanDistance(w.p.Position, tasks[i].pos) <= actionRange {
@@ -311,65 +358,106 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 
 func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 	tierMap := make(map[string]api.PlantationUpgradeTierItem)
-	for _, t := range arena.PlantationUpgrades.Tiers { tierMap[t.Name] = t }
+	for _, t := range arena.PlantationUpgrades.Tiers {
+		tierMap[t.Name] = t
+	}
 
 	// 0. ЭКСТРЕННО
 	for _, m := range arena.MeteoForecasts {
 		if m.Kind == "earthquake" && m.TurnsUntil <= 3 {
-			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current < t.Max { return "earthquake_mitigation" }
+			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current < t.Max {
+				return "earthquake_mitigation"
+			}
 		}
 	}
 
 	// 1. Агрессивный старт: settlement_limit
 	if len(arena.Plantations) < 10 {
-		if t, ok := tierMap["settlement_limit"]; ok && t.Current < t.Max { return "settlement_limit" }
+		if t, ok := tierMap["settlement_limit"]; ok && t.Current < t.Max {
+			return "settlement_limit"
+		}
 	}
 
 	// 2. SIGNAL RANGE (Пункт 3 плана)
-	if t, ok := tierMap["signal_range"]; ok && t.Current < t.Max { return "signal_range" }
+	if t, ok := tierMap["signal_range"]; ok && t.Current < t.Max {
+		return "signal_range"
+	}
 
 	// 3. Остальное
 	priority := []string{"settlement_limit", "decay_mitigation", "max_hp", "beaver_damage_mitigation", "repair_power", "vision_range"}
 	for _, name := range priority {
-		if t, ok := tierMap[name]; ok && t.Current < t.Max { return name }
+		if t, ok := tierMap[name]; ok && t.Current < t.Max {
+			return name
+		}
 	}
 	return ""
 }
 
 func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {
 	for _, t := range arena.PlantationUpgrades.Tiers {
-		if t.Name == "settlement_limit" { return 30 + t.Current }
+		if t.Name == "settlement_limit" {
+			return 30 + t.Current
+		}
 	}
 	return 30
 }
 
 func (b *Bot) getCellProgress(arena *api.PlayerResponse, pos []int) int {
 	for _, c := range arena.Cells {
-		if c.Position[0] == pos[0] && c.Position[1] == pos[1] { return c.TerraformationProgress }
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return c.TerraformationProgress
+		}
 	}
 	return 0
 }
 
 func (b *Bot) isUnderConstruction(arena *api.PlayerResponse, pos []int) bool {
 	for _, c := range arena.Construction {
-		if c.Position[0] == pos[0] && c.Position[1] == pos[1] { return true }
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return true
+		}
 	}
 	return false
 }
 
 func (b *Bot) isOccupied(arena *api.PlayerResponse, pos []int) bool {
-	if pos[0] < 0 || pos[1] < 0 || pos[0] >= arena.Size[0] || pos[1] >= arena.Size[1] { return true }
-	for _, m := range arena.Mountains { if m[0] == pos[0] && m[1] == pos[1] { return true } }
-	for _, p := range arena.Plantations { if p.Position[0] == pos[0] && p.Position[1] == pos[1] { return true } }
-	for _, e := range arena.Enemy { if e.Position[0] == pos[0] && e.Position[1] == pos[1] { return true } }
-	for _, c := range arena.Construction { if c.Position[0] == pos[0] && c.Position[1] == pos[1] { return true } }
+	if pos[0] < 0 || pos[1] < 0 || pos[0] >= arena.Size[0] || pos[1] >= arena.Size[1] {
+		return true
+	}
+	for _, m := range arena.Mountains {
+		if m[0] == pos[0] && m[1] == pos[1] {
+			return true
+		}
+	}
+	for _, p := range arena.Plantations {
+		if p.Position[0] == pos[0] && p.Position[1] == pos[1] {
+			return true
+		}
+	}
+	for _, e := range arena.Enemy {
+		if e.Position[0] == pos[0] && e.Position[1] == pos[1] {
+			return true
+		}
+	}
+	for _, c := range arena.Construction {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return true
+		}
+	}
 	return false
 }
 
-func abs(v int) int { if v < 0 { return -v }; return v }
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
 func manhattanDistance(a, b []int) int { return abs(a[0]-b[0]) + abs(a[1]-b[1]) }
 func distSq(a, b []int) int {
-	if a == nil || b == nil { return 999999 }
+	if a == nil || b == nil {
+		return 999999
+	}
 	dx, dy := a[0]-b[0], a[1]-b[1]
 	return dx*dx + dy*dy
 }

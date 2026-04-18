@@ -849,6 +849,16 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 			totalScore += math.Pow(discount, 3) * float64(prog) * 3
 		}
 
+		// Connectivity Bonus: +50 per neighbor link. Favors compact/redundant networks.
+		for i, p1 := range sim.plants {
+			for j := i + 1; j < len(sim.plants); j++ {
+				p2 := sim.plants[j]
+				if abs(p1[0]-p2[0])+abs(p1[1]-p2[1]) == 1 {
+					totalScore += math.Pow(discount, 3) * 50
+				}
+			}
+		}
+
 		if totalScore > bestScore {
 			bestScore = totalScore
 			bestIdx = i
@@ -901,6 +911,18 @@ func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, over
 	}
 	if minE < 25 {
 		score -= float64(25-minE) * 6 // WAS += (bug), NOW -= (penalty)
+	}
+
+	// REDUNDANCY BONUS: +3000 for each neighbor beyond the first.
+	// This encourages building "loops" and grids instead of "tails".
+	neighbors := 0
+	for _, p := range arena.Plantations {
+		if manhattanDistance(pos, p.Position) == 1 {
+			neighbors++
+		}
+	}
+	if neighbors > 1 {
+		score += float64(neighbors-1) * 3000
 	}
 
 	if score < 1 {

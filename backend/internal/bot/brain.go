@@ -2,8 +2,8 @@ package bot
 
 import (
 	"fmt"
-	"math"
 	"piratesbot/internal/api"
+	"sync"
 	"time"
 )
 
@@ -20,7 +20,7 @@ func (b *Bot) loop() {
 		arena, err := b.client.GetArena()
 		if err != nil {
 			b.Log(fmt.Sprintf("API Arena Error: %v", err))
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(1500 * time.Millisecond) // Back off on 429 or any error
 			continue
 		}
 
@@ -34,6 +34,8 @@ func (b *Bot) loop() {
 			lastProcessedTurn = arena.TurnNo
 		}
 
+		// Умный тайминг: если ловим 429, сервер нас разбанит через секунду.
+		// Базово сканируем раз в 200мс или по NextTurnIn.
 		waitMs := int(arena.NextTurnIn*1000) + 50
 		if waitMs < 200 {
 			waitMs = 200
@@ -72,6 +74,7 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 		mainPos := []int{mainPlantation.Position[0], mainPlantation.Position[1]}
 		progress := b.getCellProgress(arena, mainPos)
 
+		// Check for incoming earthquakes
 		eqTurns := -1
 		for _, m := range arena.MeteoForecasts {
 			if m.Kind == "earthquake" {
@@ -90,8 +93,8 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 				if p.IsMain || p.IsIsolated {
 					continue
 				}
-				// Relay to neighbor with immunity or high HP
-				if manhattanDistance(mainPos, p.Position) == 1 && p.Hp >= 15 && p.ImmunityUntilTurn > arena.TurnNo+eqTurns {
+				dx, dy := abs(p.Position[0]-mainPos[0]), abs(p.Position[1]-mainPos[1])
+				if dx+dy == 1 && p.Hp >= 15 && p.ImmunityUntilTurn > arena.TurnNo+eqTurns {
 					cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {p.Position[0], p.Position[1]}}
 					b.Log(fmt.Sprintf("EVACUATE (EQ AVOID!) CU %v→%v", mainPos, p.Position))
 					relocated = true
@@ -100,60 +103,25 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 			}
 		}
 
-		// Bug #6: Порог эвакуации 70% и выбор по деградации
-		if !relocated && (progress >= 70 || mainPlantation.Hp <= 20) {
-			bestTurns := -1
+		if !relocated && (progress >= 85 || mainPlantation.Hp <= 20) {
+			bestProg := progress
 			var bestPos []int
 			for _, p := range arena.Plantations {
 				if p.IsMain || p.IsIsolated {
 					continue
 				}
-				if manhattanDistance(mainPos, p.Position) == 1 {
-					degTurns := b.getCellDegradeTurns(arena, p.Position)
-					if degTurns > bestTurns && p.Hp >= 20 {
-						bestTurns = degTurns
+				dx, dy := abs(p.Position[0]-mainPos[0]), abs(p.Position[1]-mainPos[1])
+				if dx+dy == 1 {
+					pProg := b.getCellProgress(arena, p.Position)
+					if p.Hp >= 15 && pProg < bestProg {
+						bestProg = pProg
 						bestPos = []int{p.Position[0], p.Position[1]}
 					}
 				}
 			}
 			if bestPos != nil {
 				cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {bestPos[0], bestPos[1]}}
-				b.Log(fmt.Sprintf("EVACUATE CU %v→%v (prog=%d%%, degTurns=%d)", mainPos, bestPos, progress, bestTurns))
-				relocated = true
-			}
-		}
-
-		// Strategic Relocation: move towards "center of mass" if current cell is finished
-		if !relocated && progress >= 60 {
-			var bestPos []int
-			bestScore := -1.0
-
-			for _, p := range arena.Plantations {
-				if p.IsMain || p.IsIsolated || p.Hp < 25 {
-					continue
-				}
-				dx, dy := abs(p.Position[0]-mainPos[0]), abs(p.Position[1]-mainPos[1])
-				if dx+dy == 1 {
-					// Score based on how many neighbors this new position has
-					neighbors := 0
-					for _, other := range arena.Plantations {
-						if manhattanDistance(p.Position, other.Position) == 1 {
-							neighbors++
-						}
-					}
-					pProg := b.getCellProgress(arena, p.Position)
-					score := float64(neighbors)*100.0 - float64(pProg)
-
-					if score > bestScore {
-						bestScore = score
-						bestPos = []int{p.Position[0], p.Position[1]}
-					}
-				}
-			}
-			// Only move if the improvement is significant or current cell is very high progress
-			if bestPos != nil && (bestScore > 150 || progress >= 95) {
-				cmd.RelocateMain = [][]int{{mainPos[0], mainPos[1]}, {bestPos[0], bestPos[1]}}
-				b.Log(fmt.Sprintf("STRATEGIC RELOCATE CU %v→%v (score=%.1f)", mainPos, bestPos, bestScore))
+				b.Log(fmt.Sprintf("EVACUATE CU %v→%v (prog=%d%%)", mainPos, bestPos, progress))
 			}
 		}
 	}
@@ -172,281 +140,14 @@ func (b *Bot) processTurn(arena *api.PlayerResponse) {
 	go b.dumpTurn(arena, cmd)
 }
 
-// ========================================================================
-// Types
-// ========================================================================
-
-type target struct {
-	name     string
-	pos      []int
-	baseVal  float64
-	usage    int
-	maxUsage int
-	flat     bool // если true — нет diminishing returns (стройка)
-}
-
-func (t *target) marginalGain(workerUsedActions int, outletUsedActions int, isWorkerOutlet bool) float64 {
-	// Если воркер и есть выходная точка, штраф за использование лимита и штраф за проход команды — это одно и то же.
-	usagePenalty := outletUsedActions
-	if !isWorkerOutlet {
-		// Если это РАЗНЫЕ сущности (relay), то штраф суммируется: 1 команда тратит 1 лимит воркера И 1 пропускную способность аутлета.
-		// Но лимит воркера (5) уже проверен в цикле greedy. Здесь считаем именно падение эффективности.
-		usagePenalty = outletUsedActions 
-	}
-	
-	eff := 5 - usagePenalty
-	if eff <= 0 {
-		return 0
-	}
-	// Parallelization bias for constructions: favor focusing if we have few workers.
-	bias := 1.0
-	// BIAS REMOVED: It was causing target splitting. We now focus on finishing what we started.
-	return t.baseVal * float64(eff) * bias
-}
-
-type worker struct {
-	p           api.Plantation
-	usedActions int
-}
-
-// ========================================================================
-// Beam Search Simulation
-// ========================================================================
-
-type simState struct {
-	plants        [][2]int
-	constructions map[[2]int]int // pos -> progress (0..50)
-	score         float64
-}
-
-func newSimState(arena *api.PlayerResponse) *simState {
-	s := &simState{constructions: make(map[[2]int]int)}
-	for _, p := range arena.Plantations {
-		if !p.IsIsolated {
-			s.plants = append(s.plants, [2]int{p.Position[0], p.Position[1]})
-		}
-	}
-	for _, c := range arena.Construction {
-		s.constructions[[2]int{c.Position[0], c.Position[1]}] = c.Progress
-	}
-	return s
-}
-
-func (s *simState) clone() *simState {
-	ns := &simState{
-		plants:        make([][2]int, len(s.plants)),
-		constructions: make(map[[2]int]int),
-		score:         s.score,
-	}
-	copy(ns.plants, s.plants)
-	for k, v := range s.constructions {
-		ns.constructions[k] = v
-	}
-	return ns
-}
-
-// advance — один ход вперёд: терраформация + применение build команд + завершение строек.
-func (s *simState) advance(buildCmds map[[2]int]int) float64 {
-	turnScore := 0.0
-
-	// 1. Терраформация: каждая плантация приносит очки
-	for _, p := range s.plants {
-		val := 10.0
-		if p[0]%7 == 0 && p[1]%7 == 0 {
-			val = 15.0
-		}
-		turnScore += val * 5 // TS = 5
-	}
-
-	// 2. Применяем build-команды И считаем простой
-	activePos := make(map[[2]int]bool)
-	for pos, count := range buildCmds {
-		s.constructions[pos] += count
-		if count > 0 {
-			activePos[pos] = true
-		}
-	}
-
-	// 3. Завершённые стройки → новые плантации. Простой → штраф.
-	for pos, prog := range s.constructions {
-		if prog >= 50 {
-			s.plants = append(s.plants, pos)
-			delete(s.constructions, pos)
-			continue
-		}
-		if !activePos[pos] {
-			// DECAY RULE: -5 progress if no commands.
-			newProg := prog - 5
-			if newProg <= 0 {
-				delete(s.constructions, pos)
-			} else {
-				s.constructions[pos] = newProg
-			}
-		}
-	}
-
-	s.score += turnScore
-	return turnScore
-}
-
-// ========================================================================
-// Clone helpers for beam search
-// ========================================================================
-
-func cloneTargets(targets []target) []target {
-	cloned := make([]target, len(targets))
-	for i, t := range targets {
-		cloned[i] = t
-		cloned[i].pos = append([]int{}, t.pos...)
-		cloned[i].usage = 0
-	}
-	return cloned
-}
-
-func cloneWorkers(workers map[string]*worker) map[string]*worker {
-	cloned := make(map[string]*worker, len(workers))
-	for k, v := range workers {
-		w := *v
-		w.usedActions = 0
-		cloned[k] = &w
-	}
-	return cloned
-}
-
-// extractBuildCmds — из списка PlantationAction вытаскивает, сколько build-команд идёт на каждую позицию.
-func extractBuildCmds(actions []api.PlantationAction, arena *api.PlayerResponse) map[[2]int]int {
-	plantSet := make(map[[2]int]bool)
-	for _, p := range arena.Plantations {
-		plantSet[[2]int{p.Position[0], p.Position[1]}] = true
-	}
-	cmds := make(map[[2]int]int)
-	for _, a := range actions {
-		if len(a.Path) < 2 {
-			continue
-		}
-		// Цель — всегда ПОСЛЕДНИЙ элемент пути
-		tgtPos := a.Path[len(a.Path)-1]
-		tgt := [2]int{tgtPos[0], tgtPos[1]}
-		if !plantSet[tgt] {
-			cmds[tgt]++ // это build-команда
-		}
-	}
-	return cmds
-}
-
-// ========================================================================
-// Greedy Allocation
-// ========================================================================
-
-func greedyAllocate(
-	workers map[string]*worker,
-	targets []target,
-	allPlants []api.Plantation,
-	actionRange int,
-	signalRange int,
-	maxActions int,
-) []api.PlantationAction {
-	var actions []api.PlantationAction
-	currentActions := 0
-	exitUsage := make(map[[2]int]int)
-	var lastBestTarget *target
-
-	for currentActions < maxActions {
-		bestScore := -1.0
-		var bestWorker *worker
-		var bestTarget *target
-		var bestExit []int
-
-		for _, w := range workers {
-			if w.usedActions >= 5 {
-				continue
-			}
-			for i := range targets {
-				t := &targets[i]
-				if t.usage >= t.maxUsage {
-					continue
-				}
-
-				// Self-repair check: worker cannot repair itself
-				if t.name == "Repair CU" || t.name == "Repair Colony" || t.name == "Repair Bridge" {
-					if w.p.Position[0] == t.pos[0] && w.p.Position[1] == t.pos[1] {
-						continue
-					}
-				} else if w.p.Position[0] == t.pos[0] && w.p.Position[1] == t.pos[1] {
-					// Non-repair actions also shouldn't target self location unless it's sabotage (impossible on self)
-					continue
-				}
-
-				// Find best exit point (relay)
-				var chosenExit []int
-				// Default is the worker itself
-				if chebyshevDistance(w.p.Position, t.pos) <= actionRange {
-					chosenExit = w.p.Position
-				}
-
-				// Check other plants as outlets within Signal Range
-				for _, relay := range allPlants {
-					if chebyshevDistance(w.p.Position, relay.Position) <= signalRange &&
-						chebyshevDistance(relay.Position, t.pos) <= actionRange {
-						// Found a relay. If it's better (less used?), we could pick it.
-						// For now, if we don't have an exit yet, or this relay has less usage than current chosenExit
-						exitKey := [2]int{relay.Position[0], relay.Position[1]}
-						if chosenExit == nil || exitUsage[exitKey] < exitUsage[[2]int{chosenExit[0], chosenExit[1]}] {
-							chosenExit = relay.Position
-						}
-					}
-				}
-
-				if chosenExit == nil {
-					continue
-				}
-
-				exitKey := [2]int{chosenExit[0], chosenExit[1]}
-				isWorkerOutlet := (w.p.Position[0] == chosenExit[0] && w.p.Position[1] == chosenExit[1])
-				score := t.marginalGain(w.usedActions, exitUsage[exitKey], isWorkerOutlet)
-
-				// STICKY BONUS: Prefer the target we just picked in previous action iteration of this loop.
-				if lastBestTarget != nil && t.pos[0] == lastBestTarget.pos[0] && t.pos[1] == lastBestTarget.pos[1] {
-					score *= 1.001
-				}
-
-				if score > bestScore {
-					bestScore = score
-					bestWorker = w
-					bestTarget = t
-					bestExit = chosenExit
-				}
-			}
-		}
-
-		if bestWorker == nil || bestTarget == nil || bestScore <= 0 {
-			break
-		}
-
-		lastBestTarget = bestTarget
-
-		exitKey := [2]int{bestExit[0], bestExit[1]}
-		actions = append(actions, api.PlantationAction{
-			Path: [][]int{
-				{bestWorker.p.Position[0], bestWorker.p.Position[1]},
-				{bestExit[0], bestExit[1]},
-				{bestTarget.pos[0], bestTarget.pos[1]},
-			},
-		})
-		bestWorker.usedActions++
-		exitUsage[exitKey]++
-		bestTarget.usage++
-		currentActions++
-	}
-
-	return actions
-}
-
-// ========================================================================
-// computeHiveMind — main decision engine
-// ========================================================================
-
 func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction {
+	var actions []api.PlantationAction
+
+	// 1. ПОДГОТОВКА ДАННЫХ И ОПТИМИЗАЦИЯ КЕША
+	type worker struct {
+		p           api.Plantation
+		usedActions int
+	}
 	workers := make(map[string]*worker)
 	var mainPlantation api.Plantation
 	for _, p := range arena.Plantations {
@@ -458,573 +159,193 @@ func (b *Bot) computeHiveMind(arena *api.PlayerResponse) []api.PlantationAction 
 		}
 	}
 
-	// Изолированные не дают команд — спасти их можно только мостом/ремонтом сети.
-	var isolatedPlants []api.Plantation
-	var connectedPlants []api.Plantation
-	for _, p := range arena.Plantations {
-		if p.IsIsolated {
-			isolatedPlants = append(isolatedPlants, p)
-		} else {
-			connectedPlants = append(connectedPlants, p)
-		}
-	}
-
 	actionRange := arena.ActionRange
 	if actionRange <= 0 {
 		actionRange = 1
 	}
 
-	limit := b.getMaxPlantations(arena)
-	currentCount := len(arena.Plantations) + len(arena.Construction)
-	overbuiltRatio := float64(currentCount) / float64(limit)
-
-	plantCount := len(arena.Plantations)
-	// При изоляции colony repair нужен
-	isAggressive := plantCount < 10 && len(isolatedPlants) == 0
-
-	if isAggressive {
-		b.Log(fmt.Sprintf("Aggressive Mode (%d plantations). Repairs disabled for colonies.", plantCount))
+	// Оптимизация: индексируем карту для быстрого доступа O(1)
+	occupiedMap := make(map[string]bool)
+	for _, m := range arena.Mountains {
+		occupiedMap[fmt.Sprintf("%d,%d", m[0], m[1])] = true
+	}
+	for _, p := range arena.Plantations {
+		occupiedMap[fmt.Sprintf("%d,%d", p.Position[0], p.Position[1])] = true
+	}
+	for _, e := range arena.Enemy {
+		occupiedMap[fmt.Sprintf("%d,%d", e.Position[0], e.Position[1])] = true
+	}
+	for _, c := range arena.Construction {
+		occupiedMap[fmt.Sprintf("%d,%d", c.Position[0], c.Position[1])] = true
 	}
 
+	fastIsOccupied := func(pos []int) bool {
+		if pos[0] < 0 || pos[1] < 0 || pos[0] >= arena.Size[0] || pos[1] >= arena.Size[1] {
+			return true
+		}
+		return occupiedMap[fmt.Sprintf("%d,%d", pos[0], pos[1])]
+	}
+
+	// Локальная функция проверки безопасности (вынесена из замыкания для удобства)
 	isSafe := func(pos []int) bool {
 		for _, m := range arena.MeteoForecasts {
 			if m.Kind == "sandstorm" {
-				if m.Position != nil && len(m.Position) == 2 {
-					if d := chebyshevDistance(pos, m.Position); d <= m.Radius {
-						return false
-					}
+				if distSq(pos, m.Position) <= m.Radius*m.Radius || distSq(pos, m.NextPosition) <= m.Radius*m.Radius {
+					return false
 				}
-				if m.NextPosition != nil && len(m.NextPosition) == 2 {
-					if d := chebyshevDistance(pos, m.NextPosition); d <= m.Radius {
-						return false
-					}
+			}
+			if m.Kind == "earthquake" && m.TurnsUntil <= 2 {
+				if distSq(pos, m.Position) <= m.Radius*m.Radius {
+					return false
 				}
 			}
 		}
 		return true
 	}
 
-	canStartNewBuild := true
-	maxParallelBuilds := 2
-	if plantCount >= 3 {
-		maxParallelBuilds = 4
-	}
-	if plantCount >= 10 {
-		maxParallelBuilds = 99
-	}
-
-	if len(arena.Construction) >= maxParallelBuilds {
-		canStartNewBuild = false
+	// 2. КОНКУРЕНТНОЕ ФОРМИРОВАНИЕ ЗАДАЧ
+	type targetTask struct {
+		name     string
+		pos      []int
+		needed   int
+		assigned int
+		priority int
 	}
 
-	// --- СТРОИМ СПИСОК ЦЕЛЕЙ ---
-	var targets []target
+	var (
+		tasks   []targetTask
+		tasksMu sync.Mutex
+		wg      sync.WaitGroup
+	)
 
-	// FIX #2: CU Repair must be prioritized above all else. 1M score ensures it wins.
-	if mainPlantation.Hp > 0 && mainPlantation.Hp <= 30 {
-		targets = append(targets, target{
-			name: "Repair CU", pos: mainPlantation.Position,
-			baseVal: 1000000, maxUsage: 5,
-		})
-	}
-
-	// Достройка текущих стройплощадок (flat=true)
-	// Now uses buildScore to ensure it's on the same ~100k scale as new build targets.
-	for _, constr := range arena.Construction {
-		val := b.buildScore(arena, constr.Position, mainPlantation.Position, overbuiltRatio)
-		targets = append(targets, target{
-			name: "Finish Construction", pos: constr.Position,
-			baseVal: val, maxUsage: 50, flat: true,
-		})
-	}
-
-	// Охота на бобров
-	for _, bvr := range arena.Beavers {
-		targets = append(targets, target{
-			name: "Hunt Beaver", pos: bvr.Position,
-			baseVal: 2000, maxUsage: 4,
-		})
-	}
-
-	// Диверсия врагов
-	for _, enemy := range arena.Enemy {
-		val := b.sabotageScore(enemy)
-		targets = append(targets, target{
-			name: "Sabotage Enemy", pos: enemy.Position,
-			baseVal: val, maxUsage: 4,
-		})
-	}
-
-	// Ремонт обычных плантаций
-	if !isAggressive {
-		for _, p := range arena.Plantations {
-			if !p.IsMain && !p.IsIsolated && p.Hp > 0 && p.Hp <= 25 {
-				targets = append(targets, target{
-					name: "Repair Colony", pos: p.Position,
-					baseVal: 125000, maxUsage: 3, // Scaled up to ~100k+ ROI
-				})
-			}
-		}
-	}
-
-	// ============================================================
-	// BRIDGE REPAIR — ремонт плантаций, чья смерть изолирует других.
-	// Работает ВСЕГДА, даже в aggressive mode.
-	// ============================================================
-	for _, p := range arena.Plantations {
-		if p.IsMain || p.IsIsolated || p.Hp > 25 {
-			continue
-		}
-		neighborCount := 0
-		for _, other := range arena.Plantations {
-			if other.Id == p.Id || other.IsIsolated {
+	// Задача А: Достройка (Prio 1500+)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var local []targetTask
+		for _, constr := range arena.Construction {
+			if !isSafe(constr.Position) {
 				continue
 			}
-			if manhattanDistance(p.Position, other.Position) == 1 {
-				neighborCount++
+			needed, prio := 5, 1500
+			if constr.Progress >= 90 {
+				needed, prio = 50, 2000
 			}
+			local = append(local, targetTask{"Finish", constr.Position, needed, 0, prio})
 		}
-		if neighborCount >= 2 {
-			targets = append(targets, target{
-				name: "Repair Bridge", pos: p.Position,
-				baseVal: 140000, maxUsage: 3, // Prioritize bridges over generic colonies
-			})
-			b.Log(fmt.Sprintf("BRIDGE REPAIR: %v hp=%d (connects %d neighbors)", p.Position, p.Hp, neighborCount))
+		tasksMu.Lock()
+		tasks = append(tasks, local...)
+		tasksMu.Unlock()
+	}()
+
+	// Задача Б: Охота и Саботаж (Prio 400-700)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var local []targetTask
+		for _, bvr := range arena.Beavers {
+			local = append(local, targetTask{"Hunt", bvr.Position, 4, 0, 400})
 		}
-	}
-
-	// ============================================================
-	// PREEMPTIVE BRIDGE — если мост скоро деградирует, построить обходной
-	// путь ЗАРАНЕЕ, пока мост ещё жив.
-	// ============================================================
-	for _, p := range arena.Plantations {
-		if p.IsIsolated {
-			continue
+		for _, enemy := range arena.Enemy {
+			local = append(local, targetTask{"Sabotage", enemy.Position, 4, 0, 700})
 		}
-		degTurns := b.getCellDegradeTurns(arena, p.Position)
-		if degTurns < 0 || degTurns > 15 {
-			continue
-		}
+		tasksMu.Lock()
+		tasks = append(tasks, local...)
+		tasksMu.Unlock()
+	}()
 
-		// Считаем соседей-плантации
-		var neighborPos [][]int
-		for _, other := range arena.Plantations {
-			if other.Id == p.Id || other.IsIsolated {
-				continue
+	// Задача В: Экспансия и Побег (Prio 1-500)
+	limit := b.getMaxPlantations(arena)
+	currentCount := len(arena.Plantations) + len(arena.Construction)
+	if currentCount < limit {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			expansionOffsets := [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
+			if currentCount == 1 {
+				expansionOffsets = [][]int{{-1, 0}, {1, 0}}
+			} else if currentCount == 2 {
+				expansionOffsets = [][]int{{0, -1}, {0, 1}}
 			}
-			if manhattanDistance(p.Position, other.Position) == 1 {
-				neighborPos = append(neighborPos, other.Position)
-			}
-		}
-		if len(neighborPos) < 2 {
-			continue // не мост — деградация не опасна
-		}
 
-		b.Log(fmt.Sprintf("DEGRADATION WARNING: bridge %v degrades in %d turns (connects %d)",
-			p.Position, degTurns, len(neighborPos)))
+			dedup := make(map[string]targetTask)
 
-		// Ищем лучшую позицию для обходного моста:
-		// Цель: позиция, смежная с максимумом соседей dying_bridge
-		var bestBypass []int
-		bestConnects := 0
-		for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
-			n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
-			if b.isOccupied(arena, n) || !isSafe(n) {
-				continue
-			}
-			// skip if n is the same position as the bridge itself
-			connects := 0
-			for _, np := range neighborPos {
-				if manhattanDistance(n, np) <= 1 {
-					connects++
-				}
-			}
-			if connects > bestConnects {
-				bestConnects = connects
-				bestBypass = n
-			}
-		}
-
-		if bestBypass != nil && bestConnects >= 1 {
-			val := 7000.0
-			if degTurns <= 8 {
-				val = 8500.0
-			}
-			// Boost existing target if already present
-			boosted := false
-			for i := range targets {
-				if targets[i].pos[0] == bestBypass[0] && targets[i].pos[1] == bestBypass[1] {
-					if targets[i].baseVal < val {
-						targets[i].baseVal = val
-					}
-					targets[i].name = "Preemptive Bridge"
-					boosted = true
-				}
-			}
-			if !boosted {
-				targets = append(targets, target{
-					name:     "Preemptive Bridge",
-					pos:      bestBypass,
-					baseVal:  val,
-					maxUsage: 50,
-					flat:     true,
-				})
-			}
-			b.Log(fmt.Sprintf("PREEMPTIVE BRIDGE: build %v to bypass dying %v (degrades in %d, connects %d)",
-				bestBypass, p.Position, degTurns, bestConnects))
-		}
-	}
-
-	// ============================================================
-	// RECONNECT — если есть isolated плантации, построить мост обратно.
-	// Приоритет ВЫШЕ expansion, НИЖЕ CU repair.
-	// ============================================================
-	reconnectBase := 12000.0
-	if len(isolatedPlants) > 0 {
-		// Выше «Finish Construction» (15000) и типичного expansion — иначе greedy жрёт одну клетку.
-		reconnectBase = 85000.0
-	}
-
-	if len(isolatedPlants) > 0 && len(connectedPlants) > 0 {
-		b.Log(fmt.Sprintf("WARNING: %d isolated plantations! Reconnect priority!", len(isolatedPlants)))
-
-		reconnectSeen := map[[2]int]bool{}
-		// Ищем позиции, смежные с connected, которые также смежны с isolated
-		for _, cp := range connectedPlants {
-			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
-				n := []int{cp.Position[0] + offset[0], cp.Position[1] + offset[1]}
-				key := [2]int{n[0], n[1]}
-				if reconnectSeen[key] {
+			// Fill expansion candidates
+			for _, p := range arena.Plantations {
+				if p.IsIsolated {
 					continue
 				}
-				reconnectSeen[key] = true
-
-				// Уже занята плантацией? Тогда не нужно строить
-				isPlant := false
-				for _, pp := range arena.Plantations {
-					if pp.Position[0] == n[0] && pp.Position[1] == n[1] {
-						isPlant = true
-						break
-					}
-				}
-				if isPlant {
-					continue
-				}
-
-				// Эта позиция смежна с isolated?
-				for _, ip := range isolatedPlants {
-					if manhattanDistance(n, ip.Position) <= 1 {
-						// Нашли мост! Проверяем, есть ли уже такой target (construction)
-						boosted := false
-						for i := range targets {
-							if targets[i].pos[0] == n[0] && targets[i].pos[1] == n[1] {
-								if targets[i].baseVal < reconnectBase {
-									targets[i].baseVal = reconnectBase
-								}
-								targets[i].name = "Reconnect"
-								boosted = true
+				for _, off := range expansionOffsets {
+					n := []int{p.Position[0] + off[0], p.Position[1] + off[1]}
+					key := fmt.Sprintf("%d,%d", n[0], n[1])
+					if _, ok := dedup[key]; !ok && !fastIsOccupied(n) && isSafe(n) {
+						d := manhattanDistance(n, mainPlantation.Position)
+						prio := d
+						for _, neighborsOff := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+							if b.isOurControl(arena, []int{n[0] + neighborsOff[0], n[1] + neighborsOff[1]}) {
+								prio += 100
 							}
 						}
-						if !boosted && !b.isOccupied(arena, n) {
-							targets = append(targets, target{
-								name: "Reconnect", pos: n,
-								baseVal: reconnectBase + 20000, // Ensure it's slightly better than generic expansion
-								maxUsage: 50, flat: true,
-							})
-						}
-						b.Log(fmt.Sprintf("RECONNECT target: %v (bridges %v to %v)", n, cp.Position, ip.Position))
-						break
+						dedup[key] = targetTask{"Expansion", n, 4, 0, prio}
 					}
 				}
 			}
-		}
+
+			tasksMu.Lock()
+			for _, t := range dedup {
+				tasks = append(tasks, t)
+			}
+			tasksMu.Unlock()
+		}()
 	}
 
-	// Escape route для ЦУ
-	if mainPlantation.Hp > 0 {
-		hasSafe := false
-		cuProg := b.getCellProgress(arena, mainPlantation.Position)
-		for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
-			n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
-			if b.isUnderConstruction(arena, n) {
-				hasSafe = true
-				break
-			}
-			for _, p := range arena.Plantations {
-				if p.Position[0] == n[0] && p.Position[1] == n[1] && p.Hp > 0 && b.getCellProgress(arena, p.Position) < cuProg {
-					hasSafe = true
-					break
-				}
-			}
-		}
-		if !hasSafe {
-			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
-				n := []int{mainPlantation.Position[0] + offset[0], mainPlantation.Position[1] + offset[1]}
-				if !b.isOccupied(arena, n) && isSafe(n) {
-					targets = append(targets, target{
-						name: "Expansion (Escape)", pos: n,
-						baseVal: 2500, maxUsage: 50, flat: true,
-					})
-					break
-				}
+	wg.Wait()
+
+	// 3. СОРТИРОВКА
+	for i := 0; i < len(tasks); i++ {
+		for j := i + 1; j < len(tasks); j++ {
+			if tasks[j].priority > tasks[i].priority {
+				tasks[i], tasks[j] = tasks[j], tasks[i]
 			}
 		}
 	}
 
-	// Экспансия
-	// FOCUS LOCK: In the early game, if we have active constructions, do NOT start new once.
-	// This prevents "darting" across the map.
-	focusLock := isAggressive && len(arena.Construction) > 0
+	// 4. РАСПРЕДЕЛЕНИЕ (Слой за слоем)
+	maxActions := 50
+	currentActions := 0
 
-	if currentCount < limit && canStartNewBuild && !focusLock {
-		seen := map[[2]int]bool{}
-		for _, p := range arena.Plantations {
-			if p.IsIsolated {
+	for layer := 0; layer < 5; layer++ {
+		for i := range tasks {
+			if tasks[i].assigned >= tasks[i].needed || currentActions >= maxActions {
 				continue
 			}
-			for _, offset := range [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
-				n := []int{p.Position[0] + offset[0], p.Position[1] + offset[1]}
-				key := [2]int{n[0], n[1]}
-				if seen[key] || b.isOccupied(arena, n) || !isSafe(n) {
+			for _, w := range workers {
+				if tasks[i].assigned >= tasks[i].needed || currentActions >= maxActions {
+					break
+				}
+				if w.usedActions != layer {
 					continue
 				}
-				seen[key] = true
 
-				val := b.buildScore(arena, n, mainPlantation.Position, overbuiltRatio)
-				targets = append(targets, target{
-					name: "Expansion", pos: n,
-					baseVal: val, maxUsage: 50, flat: true,
-				})
-			}
-		}
-	}
+				// Клетка никогда не действует на саму себя
+				if w.p.Position[0] == tasks[i].pos[0] && w.p.Position[1] == tasks[i].pos[1] {
+					continue
+				}
 
-	// ================================================================
-	// FIX #3: BEAM SEARCH — multi-turn lookahead (2 хода)
-	// Генерируем несколько вариантов распределения команд,
-	// симулируем каждый на 2 хода вперёд, выбираем лучший.
-	// ================================================================
-	if len(targets) <= 1 || len(workers) == 0 {
-		// Тривиальный случай — beam search не нужен
-		return greedyAllocate(workers, targets, arena.Plantations, actionRange, 3, 50)
-	}
-
-	type beamCandidate struct {
-		actions []api.PlantationAction
-		label   string
-	}
-	var candidates []beamCandidate
-
-	signalRange := 3
-	for _, t := range arena.PlantationUpgrades.Tiers {
-		if t.Name == "signal_range" {
-			signalRange = 3 + t.Current
-			break
-		}
-	}
-
-	maxActions := len(arena.Plantations) * 5
-	candidates = append(candidates, beamCandidate{
-		actions: greedyAllocate(cloneWorkers(workers), cloneTargets(targets), arena.Plantations, actionRange, signalRange, maxActions),
-		label:   "baseline",
-	})
-
-	// Candidate 2: defensive (focus on survival and connectivity)
-	{
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			switch modTargets[i].name {
-			case "Repair CU":
-				modTargets[i].baseVal *= 2.0
-			case "Reconnect", "Repair Bridge", "Preemptive Bridge":
-				modTargets[i].baseVal *= 1.8
-			case "Repair Colony":
-				modTargets[i].baseVal *= 1.5
-			case "Expansion", "Finish Construction":
-				modTargets[i].baseVal *= 0.5
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, arena.Plantations, actionRange, signalRange, maxActions),
-			label:   "defensive",
-		})
-	}
-
-	// Candidate 3: aggressive_expansion
-	{
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			if modTargets[i].name == "Expansion" || modTargets[i].name == "Finish Construction" {
-				modTargets[i].baseVal *= 2.0
-			} else if modTargets[i].name == "Sabotage Enemy" || modTargets[i].name == "Hunt Beaver" {
-				modTargets[i].baseVal *= 0.5
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, arena.Plantations, actionRange, signalRange, maxActions),
-			label:   "aggressive_expansion",
-		})
-	}
-
-	// Candidate 4: vicious (sabotage and beavers)
-	{
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			if modTargets[i].name == "Sabotage Enemy" || modTargets[i].name == "Hunt Beaver" {
-				modTargets[i].baseVal *= 2.5
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, arena.Plantations, actionRange, signalRange, maxActions),
-			label:   "vicious",
-		})
-	}
-
-	// Candidate 5+: focus each active construction
-	for _, constr := range arena.Construction {
-		modTargets := cloneTargets(targets)
-		for i := range modTargets {
-			if modTargets[i].name == "Finish Construction" &&
-				modTargets[i].pos[0] == constr.Position[0] && modTargets[i].pos[1] == constr.Position[1] {
-				modTargets[i].baseVal = 25000
-			}
-		}
-		candidates = append(candidates, beamCandidate{
-			actions: greedyAllocate(cloneWorkers(workers), modTargets, arena.Plantations, actionRange, signalRange, maxActions),
-			label:   fmt.Sprintf("focus_constr_%d_%d", constr.Position[0], constr.Position[1]),
-		})
-	}
-
-	// --- SIMULATE EACH CANDIDATE 3 TURNS FORWARD ---
-	root := newSimState(arena)
-	discount := 0.85
-	bestScore := -math.MaxFloat64
-	bestIdx := 0
-
-	for i, cand := range candidates {
-		sim := root.clone()
-		buildCmds := extractBuildCmds(cand.actions, arena)
-
-		totalScore := 0.0
-		for t := 0; t < 3; t++ {
-			turnScore := sim.advance(buildCmds)
-			totalScore += math.Pow(discount, float64(t)) * turnScore
-		}
-		// Terminal bonus: экспоненциальный рост (плантации + прогресс)
-		totalScore += math.Pow(discount, 3) * float64(len(sim.plants)) * 300
-		for _, prog := range sim.constructions {
-			totalScore += math.Pow(discount, 3) * float64(prog) * 3
-		}
-
-		// Connectivity Bonus: +50 per neighbor link. Favors compact/redundant networks.
-		for i, p1 := range sim.plants {
-			for j := i + 1; j < len(sim.plants); j++ {
-				p2 := sim.plants[j]
-				if abs(p1[0]-p2[0])+abs(p1[1]-p2[1]) == 1 {
-					totalScore += math.Pow(discount, 3) * 50
+				if manhattanDistance(w.p.Position, tasks[i].pos) <= actionRange {
+					actions = append(actions, api.PlantationAction{
+						Path: [][]int{{w.p.Position[0], w.p.Position[1]}, {tasks[i].pos[0], tasks[i].pos[1]}},
+					})
+					w.usedActions++
+					tasks[i].assigned++
+					currentActions++
 				}
 			}
 		}
-
-		if totalScore > bestScore {
-			bestScore = totalScore
-			bestIdx = i
-		}
 	}
 
-	b.Log(fmt.Sprintf("BeamSearch: %d candidates, winner=%s (score=%.0f)",
-		len(candidates), candidates[bestIdx].label, bestScore))
-
-	return candidates[bestIdx].actions
+	return actions
 }
-
-// ========================================================================
-// Scoring Functions
-// ========================================================================
-
-// buildScore — ROI от строительства новой плантации.
-func (b *Bot) buildScore(arena *api.PlayerResponse, pos []int, cuPos []int, overbuiltRatio float64) float64 {
-	cellValue := 1000.0
-	if pos[0]%7 == 0 && pos[1]%7 == 0 {
-		cellValue = 1500.0 // усиленная клетка +50%
-	}
-
-	expectedLifetime := 100.0
-	distFromCU := float64(manhattanDistance(pos, cuPos))
-	chainPenalty := distFromCU * 10
-	buildTimePenalty := 50.0
-
-	score := (cellValue * expectedLifetime) - buildTimePenalty - chainPenalty
-
-	// Anti-overbuild: штраф если >80% лимита
-	if overbuiltRatio > 0.8 {
-		score *= (1.0 - (overbuiltRatio-0.8)*5)
-	}
-
-	// FIX #1: ШТРАФ (а не бонус!) за близость к бобрам/врагам
-	minB, minE := 999, 999
-	for _, bvr := range arena.Beavers {
-		if d := manhattanDistance(pos, bvr.Position); d < minB {
-			minB = d
-		}
-	}
-	for _, enm := range arena.Enemy {
-		if d := manhattanDistance(pos, enm.Position); d < minE {
-			minE = d
-		}
-	}
-	if minB < 25 {
-		score -= float64(25-minB) * 8 // WAS += (bug), NOW -= (penalty)
-	}
-	if minE < 25 {
-		score -= float64(25-minE) * 6 // WAS += (bug), NOW -= (penalty)
-	}
-
-	// REDUNDANCY BONUS: +3000 for each neighbor beyond the first.
-	// This encourages building "loops" and grids instead of "tails".
-	neighbors := 0
-	for _, p := range arena.Plantations {
-		if manhattanDistance(pos, p.Position) == 1 {
-			neighbors++
-		}
-	}
-	if neighbors > 1 {
-		score += float64(neighbors-1) * 15000 // Huge bonus for grid/loop redundancy
-	}
-
-	// FOCUS BONUS: Favor existing progress heavily.
-	for _, c := range arena.Construction {
-		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
-			// Progressive bonus to override any spatial ties.
-			// At 5% progress, bonus is +15k. At 45%, it's +55k.
-			score += 10000 + float64(c.Progress)*1000
-			break
-		}
-	}
-
-	if score < 1 {
-		score = 1
-	}
-	return score
-}
-
-// sabotageScore — ценность диверсии врага. Kill-finish priority.
-func (b *Bot) sabotageScore(enemy api.EnemyPlantation) float64 {
-	if enemy.Hp <= 10 {
-		return 5000.0 // kill-finish priority MAX
-	}
-
-	cellValue := 1000.0
-	if enemy.Position[0]%7 == 0 && enemy.Position[1]%7 == 0 {
-		cellValue = 1500.0
-	}
-
-	return cellValue * 0.8
-}
-
-// ========================================================================
-// Upgrades
-// ========================================================================
 
 func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 	tierMap := make(map[string]api.PlantationUpgradeTierItem)
@@ -1032,32 +353,29 @@ func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 		tierMap[t.Name] = t
 	}
 
-	// 0. Bug #7: ЭКСТРЕННО: землетрясение. Масштабируем до turnsUntil <= 2 для надежности.
+	// 0. ЭКСТРЕННО
 	for _, m := range arena.MeteoForecasts {
-		if m.Kind == "earthquake" && m.TurnsUntil <= 2 {
-			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current == 0 {
+		if m.Kind == "earthquake" && m.TurnsUntil <= 3 {
+			if t, ok := tierMap["earthquake_mitigation"]; ok && t.Current < t.Max {
 				return "earthquake_mitigation"
 			}
 		}
 	}
 
-	// 1. settlement_limit — первый приоритет (x10 расширение)
-	if t, ok := tierMap["settlement_limit"]; ok && t.Current < t.Max {
-		return "settlement_limit"
+	// 1. Агрессивный старт: settlement_limit
+	if len(arena.Plantations) < 10 {
+		if t, ok := tierMap["settlement_limit"]; ok && t.Current < t.Max {
+			return "settlement_limit"
+		}
 	}
 
-	// 2. signal_range — больше радиус → меньше chain penalty
+	// 2. SIGNAL RANGE (Пункт 3 плана)
 	if t, ok := tierMap["signal_range"]; ok && t.Current < t.Max {
 		return "signal_range"
 	}
 
-	// 3. max_hp — выживаемость
-	if t, ok := tierMap["max_hp"]; ok && t.Current < t.Max {
-		return "max_hp"
-	}
-
-	// 4. Остальное
-	priority := []string{"decay_mitigation", "beaver_damage_mitigation", "repair_power", "vision_range"}
+	// 3. Остальное
+	priority := []string{"settlement_limit", "decay_mitigation", "max_hp", "beaver_damage_mitigation", "repair_power", "vision_range"}
 	for _, name := range priority {
 		if t, ok := tierMap[name]; ok && t.Current < t.Max {
 			return name
@@ -1065,10 +383,6 @@ func (b *Bot) chooseBestUpgrade(arena *api.PlayerResponse) string {
 	}
 	return ""
 }
-
-// ========================================================================
-// Helpers
-// ========================================================================
 
 func (b *Bot) getMaxPlantations(arena *api.PlayerResponse) int {
 	for _, t := range arena.PlantationUpgrades.Tiers {
@@ -1088,13 +402,18 @@ func (b *Bot) getCellProgress(arena *api.PlayerResponse, pos []int) int {
 	return 0
 }
 
-func (b *Bot) getCellDegradeTurns(arena *api.PlayerResponse, pos []int) int {
-	for _, c := range arena.Cells {
-		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
-			return c.TurnsUntilDegradation
+func (b *Bot) isOurControl(arena *api.PlayerResponse, pos []int) bool {
+	for _, p := range arena.Plantations {
+		if p.Position[0] == pos[0] && p.Position[1] == pos[1] {
+			return true
 		}
 	}
-	return -1
+	for _, c := range arena.Construction {
+		if c.Position[0] == pos[0] && c.Position[1] == pos[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *Bot) isUnderConstruction(arena *api.PlayerResponse, pos []int) bool {
@@ -1139,13 +458,7 @@ func abs(v int) int {
 	}
 	return v
 }
-func chebyshevDistance(a, b []int) int {
-	return int(math.Max(math.Abs(float64(a[0]-b[0])), math.Abs(float64(a[1]-b[1]))))
-}
-
-func manhattanDistance(a, b []int) int {
-	return int(math.Abs(float64(a[0]-b[0])) + math.Abs(float64(a[1]-b[1])))
-}
+func manhattanDistance(a, b []int) int { return abs(a[0]-b[0]) + abs(a[1]-b[1]) }
 func distSq(a, b []int) int {
 	if a == nil || b == nil {
 		return 999999
